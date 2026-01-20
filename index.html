@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إدارة معهد شنقيط</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#f4f6f7;margin:10px}
+h2{text-align:center;color:#1e8449}
+button{padding:10px;margin:5px;border:none;background:#1e8449;color:#fff;cursor:pointer}
+input,textarea{width:100%;padding:8px;margin:4px}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #ccc;padding:6px;text-align:center}
+img.photo{width:45px;height:45px;border-radius:50%}
+.hidden{display:none}
+.card{background:#fff;padding:10px;margin-top:10px;border-radius:6px}
+.top{text-align:center}
+.logo{width:80px}
+.red{background:#c0392b}
+.gray{background:#555}
+</style>
+</head>
+
+<body>
+
+<div class="top">
+<img class="logo" src="data:image/jpeg;base64,TVbwLpW5NDnQqJEpSlABO8Xk9Y3+NsCXk2IYghbtWjk2panPO+0dEdkUNK0ohRkR...9LYmMDgFT5ZXMUt2f4VgNTkuWcfl4rebZsMLNlypKE/EQFakvSjsfN3rU1Bj/9k=">
+<h2>إدارة معهد شنقيط</h2>
+
+<button onclick="showForm()">➕ إضافة أستاذ</button>
+<button onclick="showList()">📋 عرض الأساتذة</button>
+</div>
+
+<!-- نموذج الإدخال -->
+<div id="form" class="card hidden">
+<input id="name" placeholder="اسم الأستاذ">
+<input id="birthDate" placeholder="تاريخ الميلاد">
+<input id="birthPlace" placeholder="محل الميلاد">
+<input id="nationalId" placeholder="الرقم الوطني">
+<input id="joinDate" placeholder="تاريخ الالتحاق">
+<input id="branch" placeholder="الفرع">
+<input id="skill" placeholder="الكفاءة">
+<textarea id="note" placeholder="ملاحظة"></textarea>
+<input type="file" id="image">
+<button onclick="save()">💾 حفظ</button>
+</div>
+
+<!-- القائمة -->
+<div id="listBox" class="card hidden">
+<input placeholder="🔍 بحث بالاسم أو الرقم" onkeyup="search(this.value)">
+<button onclick="exportAll()">📄 تصدير PDF للجميع</button>
+
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>الصورة</th>
+<th>الاسم</th>
+<th>الرقم</th>
+<th>إجراء</th>
+</tr>
+</thead>
+<tbody id="list"></tbody>
+</table>
+</div>
+
+<script>
+let teachers=JSON.parse(localStorage.getItem("teachers")||"[]");
+let editIndex=null;
+
+function showForm(){
+form.classList.remove("hidden");
+listBox.classList.add("hidden");
+}
+
+function showList(){
+render(teachers);
+listBox.classList.remove("hidden");
+form.classList.add("hidden");
+}
+
+function save(){
+const r=new FileReader();
+r.onload=()=>{
+const t={
+name:name.value,
+birthDate:birthDate.value,
+birthPlace:birthPlace.value,
+nationalId:nationalId.value,
+joinDate:joinDate.value,
+branch:branch.value,
+skill:skill.value,
+note:note.value,
+image:r.result
+};
+if(editIndex!=null){teachers[editIndex]=t;editIndex=null;}
+else teachers.push(t);
+localStorage.setItem("teachers",JSON.stringify(teachers));
+clear();
+showList();
+};
+if(image.files[0]) r.readAsDataURL(image.files[0]);
+else r.onload();
+}
+
+function render(arr){
+list.innerHTML="";
+arr.forEach((t,i)=>{
+list.innerHTML+=`
+<tr>
+<td>${i+1}</td>
+<td><img class="photo" src="${t.image||''}"></td>
+<td>${t.name}</td>
+<td>${t.nationalId}</td>
+<td>
+<button class="gray" onclick="edit(${i})">✏️</button>
+<button class="red" onclick="del(${i})">🗑️</button>
+<button onclick="singlePdf(${i})">📄</button>
+</td>
+</tr>`;
+});
+}
+
+function edit(i){
+const t=teachers[i];
+Object.assign(window,{
+name:{value:t.name},
+birthDate:{value:t.birthDate},
+birthPlace:{value:t.birthPlace},
+nationalId:{value:t.nationalId},
+joinDate:{value:t.joinDate},
+branch:{value:t.branch},
+skill:{value:t.skill},
+note:{value:t.note}
+});
+editIndex=i;
+showForm();
+}
+
+function del(i){
+if(confirm("حذف؟")){
+teachers.splice(i,1);
+localStorage.setItem("teachers",JSON.stringify(teachers));
+render(teachers);
+}
+}
+
+function search(v){
+render(teachers.filter(t=>t.name.includes(v)||t.nationalId.includes(v)));
+}
+
+function exportAll(){
+const {jsPDF}=window.jspdf;
+const pdf=new jsPDF();
+pdf.text("قائمة الأساتذة - معهد شنقيط",10,10);
+let y=20;
+teachers.forEach((t,i)=>{
+pdf.text(`${i+1}- ${t.name} | ${t.nationalId}`,10,y);
+y+=8;
+});
+pdf.save("teachers.pdf");
+}
+
+function singlePdf(i){
+const {jsPDF}=window.jspdf;
+const t=teachers[i];
+const pdf=new jsPDF();
+pdf.text("تقرير أستاذ - معهد شنقيط",10,10);
+if(t.image) pdf.addImage(t.image,"JPEG",150,20,40,40);
+pdf.text("الاسم: "+t.name,10,30);
+pdf.text("الرقم الوطني: "+t.nationalId,10,40);
+pdf.text("الفرع: "+t.branch,10,50);
+pdf.text("الكفاءة: "+t.skill,10,60);
+pdf.text("ملاحظة: "+t.note,10,70);
+pdf.save(t.name+".pdf");
+}
+
+function clear(){
+document.querySelectorAll("input,textarea").forEach(e=>e.value="");
+}
+</script>
+
+</body>
+</html>
