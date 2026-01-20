@@ -4,135 +4,201 @@
 <meta charset="UTF-8">
 <title>إدارة معهد شنقيط</title>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{font-family:Arial;background:#f2f5f7;margin:0}
-header{background:#2196f3;color:#fff;padding:10px;text-align:center}
-header img{width:60px;margin-bottom:5px}
-.container{padding:10px}
-button{background:#2196f3;color:#fff;border:none;padding:8px 12px;border-radius:6px}
-input{width:100%;padding:8px;margin:5px 0}
-.card{background:#fff;border-radius:10px;padding:10px;margin-bottom:10px;
-display:flex;justify-content:space-between;align-items:center}
-.name{font-size:18px;font-weight:bold}
-.hidden{display:none}
-.photo{width:50px;height:50px;border-radius:50%}
+body {
+  font-family: Tahoma, Arial;
+  background: #f4f6f8;
+  margin: 0;
+}
+header {
+  background: #2196f3;
+  color: white;
+  padding: 10px;
+  text-align: center;
+}
+header img {
+  width: 60px;
+  border-radius: 50%;
+}
+.container {
+  padding: 10px;
+}
+button {
+  background: #2196f3;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 5px;
+  margin: 2px;
+}
+input {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 6px;
+}
+.card {
+  background: white;
+  padding: 8px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.counter {
+  margin: 8px 0;
+  font-weight: bold;
+}
+.hidden { display: none; }
+img.photo {
+  width: 100px;
+  border-radius: 6px;
+}
 </style>
 </head>
 
 <body>
 
 <header>
-  <img src="logo.png">
-  <h3>إدارة معهد شنقيط</h3>
+  <img src="./logo.png">
+  <div>إدارة معهد شنقيط</div>
 </header>
 
 <div class="container">
 
 <button onclick="showForm()">➕ إضافة أستاذ</button>
-<button onclick="showList()">📋 عرض الأساتذة</button>
+<button onclick="render()">📋 عرض الأساتذة</button>
+
+<div class="counter" id="count"></div>
 
 <!-- نموذج الإدخال -->
 <div id="form" class="hidden">
   <input id="name" placeholder="اسم الأستاذ">
-  <input id="birthDate" placeholder="تاريخ الميلاد">
-  <input id="birthPlace" placeholder="محل الميلاد">
-  <input id="nationalId" placeholder="الرقم الوطني">
-  <input id="joinDate" placeholder="تاريخ الالتحاق بالمعهد">
+  <input id="birth" placeholder="تاريخ ومحل الميلاد">
+  <input id="nid" placeholder="الرقم الوطني">
+  <input id="join" placeholder="تاريخ الالتحاق">
   <input id="branch" placeholder="الفرع">
   <input id="skill" placeholder="الكفاءة">
-  <input type="file" id="image">
+  <input type="file" id="photo">
   <button onclick="save()">💾 حفظ</button>
 </div>
 
 <!-- اللائحة -->
-<div id="listBox" class="hidden">
-  <input placeholder="🔍 بحث بالاسم أو الرقم" onkeyup="search(this.value)">
-  <div id="list"></div>
-</div>
+<div id="list"></div>
 
 </div>
+
+<!-- مكتبات PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-let teachers = JSON.parse(localStorage.getItem("teachers") || "[]");
+let editIndex = null;
 
-function showForm(){
-  form.classList.remove("hidden");
-  listBox.classList.add("hidden");
-}
-
-function showList(){
-  render(teachers);
-  listBox.classList.remove("hidden");
-  form.classList.add("hidden");
+function getData(){
+  return JSON.parse(localStorage.getItem("teachers") || "[]");
 }
 
 function save(){
-  const reader = new FileReader();
-  reader.onload = () => {
-    teachers.push({
+  let reader = new FileReader();
+  let file = document.getElementById("photo").files[0];
+
+  reader.onload = function(){
+    let data = getData();
+    let obj = {
       name: name.value,
-      birthDate: birthDate.value,
-      birthPlace: birthPlace.value,
-      nationalId: nationalId.value,
-      joinDate: joinDate.value,
+      birth: birth.value,
+      nid: nid.value,
+      join: join.value,
       branch: branch.value,
       skill: skill.value,
-      image: reader.result
-    });
-    localStorage.setItem("teachers", JSON.stringify(teachers));
-    clearForm();
-    showList();
+      photo: reader.result
+    };
+
+    if(editIndex === null) data.push(obj);
+    else data[editIndex] = obj;
+
+    localStorage.setItem("teachers", JSON.stringify(data));
+    editIndex = null;
+    document.getElementById("form").classList.add("hidden");
+    render();
   };
-  if (image.files[0]) reader.readAsDataURL(image.files[0]);
+
+  if(file) reader.readAsDataURL(file);
   else reader.onload();
 }
 
-function render(arr){
+function render(){
+  let data = getData();
   list.innerHTML = "";
-  arr.forEach((t,i)=>{
+  count.innerText = "عدد الأساتذة: " + data.length;
+
+  data.forEach((t,i)=>{
     list.innerHTML += `
     <div class="card">
+      <div>${i+1}. ${t.name}</div>
       <div>
-        <div class="name">${i+1}. ${t.name}</div>
-        <div style="color:#666">${t.branch}</div>
+        <button onclick="view(${i})">عرض</button>
+        <button onclick="edit(${i})">تعديل</button>
+        <button onclick="del(${i})">حذف</button>
       </div>
-      <button onclick="showPdf(${i})">عرض</button>
     </div>`;
   });
 }
 
-function search(v){
-  render(teachers.filter(t =>
-    t.name.includes(v) || t.nationalId.includes(v)
-  ));
+function view(i){
+  let t = getData()[i];
+  let box = document.createElement("div");
+  box.style.background = "white";
+  box.style.padding = "10px";
+  box.innerHTML = `
+    <h3>${t.name}</h3>
+    <p>الميلاد: ${t.birth}</p>
+    <p>الرقم الوطني: ${t.nid}</p>
+    <p>الالتحاق: ${t.join}</p>
+    <p>الفرع: ${t.branch}</p>
+    <p>الكفاءة: ${t.skill}</p>
+    <img class="photo" src="${t.photo}">
+    <br><br>
+    <button onclick="exportPDF(this.parentNode)">📄 PDF</button>
+  `;
+  document.body.appendChild(box);
 }
 
-function showPdf(i){
-  const { jsPDF } = window.jspdf;
-  const t = teachers[i];
-  const pdf = new jsPDF();
-
-  pdf.text("تقرير أستاذ – معهد شنقيط", 10, 10);
-
-  if (t.image)
-    pdf.addImage(t.image, "JPEG", 150, 20, 40, 40);
-
-  pdf.text("الاسم: " + t.name, 10, 30);
-  pdf.text("تاريخ الميلاد: " + t.birthDate, 10, 40);
-  pdf.text("محل الميلاد: " + t.birthPlace, 10, 50);
-  pdf.text("الرقم الوطني: " + t.nationalId, 10, 60);
-  pdf.text("تاريخ الالتحاق: " + t.joinDate, 10, 70);
-  pdf.text("الفرع: " + t.branch, 10, 80);
-  pdf.text("الكفاءة: " + t.skill, 10, 90);
-
-  pdf.save(t.name + ".pdf");
+function exportPDF(el){
+  html2canvas(el).then(canvas=>{
+    const pdf = new jspdf.jsPDF();
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 10, 10, 190, 0);
+    pdf.save("استاذ.pdf");
+  });
 }
 
-function clearForm(){
-  document.querySelectorAll("input").forEach(e=>e.value="");
+function edit(i){
+  let t = getData()[i];
+  name.value = t.name;
+  birth.value = t.birth;
+  nid.value = t.nid;
+  join.value = t.join;
+  branch.value = t.branch;
+  skill.value = t.skill;
+  editIndex = i;
+  showForm();
 }
+
+function del(i){
+  let d = getData();
+  d.splice(i,1);
+  localStorage.setItem("teachers", JSON.stringify(d));
+  render();
+}
+
+function showForm(){
+  document.getElementById("form").classList.toggle("hidden");
+}
+
+render();
 </script>
 
 </body>
