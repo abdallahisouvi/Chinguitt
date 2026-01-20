@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إدارة معهد شنقيط</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{
+  font-family: Arial;
+  background:#f2f5f7;
+  margin:0;
+}
+header{
+  background:#2196f3;
+  color:#fff;
+  padding:10px;
+  text-align:center;
+}
+header img{
+  width:60px;
+  display:block;
+  margin:0 auto 5px;
+}
+.container{padding:10px}
+button{
+  background:#2196f3;
+  color:#fff;
+  border:none;
+  padding:8px 12px;
+  border-radius:6px;
+}
+input{
+  width:100%;
+  padding:8px;
+  margin:5px 0;
+}
+.card{
+  background:#fff;
+  border-radius:10px;
+  padding:10px;
+  margin-bottom:10px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.name{
+  font-size:18px;
+  font-weight:bold;
+}
+.count{
+  color:#888;
+}
+.hidden{display:none}
+</style>
+</head>
+
+<body>
+
+<header>
+  <img src="logo.png">
+  <h3>إدارة معهد شنقيط</h3>
+</header>
+
+<div class="container">
+
+<button onclick="showForm()">➕ إضافة أستاذ</button>
+<button onclick="showList()">📋 عرض الأساتذة</button>
+
+<!-- نموذج -->
+<div id="form" class="hidden">
+  <input id="name" placeholder="اسم الأستاذ">
+  <input id="nationalId" placeholder="الرقم الوطني">
+  <input id="branch" placeholder="الفرع">
+  <input type="file" id="image">
+  <button onclick="save()">حفظ</button>
+</div>
+
+<!-- البحث -->
+<div id="listBox" class="hidden">
+  <input placeholder="ابحث بالاسم أو الرقم" onkeyup="search(this.value)">
+  <div id="list"></div>
+</div>
+
+</div>
+
+<script>
+let teachers=JSON.parse(localStorage.getItem("teachers")||"[]");
+
+function showForm(){
+form.classList.remove("hidden");
+listBox.classList.add("hidden");
+}
+
+function showList(){
+render(teachers);
+listBox.classList.remove("hidden");
+form.classList.add("hidden");
+}
+
+function save(){
+const r=new FileReader();
+r.onload=()=>{
+teachers.push({
+name:name.value,
+nationalId:nationalId.value,
+branch:branch.value,
+image:r.result
+});
+localStorage.setItem("teachers",JSON.stringify(teachers));
+name.value=nationalId.value=branch.value="";
+showList();
+};
+if(image.files[0]) r.readAsDataURL(image.files[0]);
+else r.onload();
+}
+
+function render(arr){
+list.innerHTML="";
+arr.forEach((t,i)=>{
+list.innerHTML+=`
+<div class="card">
+  <div>
+    <div class="name">${t.name}</div>
+    <div class="count">الرقم: ${i+1}</div>
+  </div>
+  <button onclick="singlePdf(${i})">عرض</button>
+</div>`;
+});
+}
+
+function search(v){
+render(teachers.filter(t=>t.name.includes(v)||t.nationalId.includes(v)));
+}
+
+function singlePdf(i){
+const {jsPDF}=window.jspdf;
+const t=teachers[i];
+const pdf=new jsPDF();
+pdf.text("تقرير أستاذ – معهد شنقيط",10,10);
+if(t.image) pdf.addImage(t.image,"JPEG",150,20,40,40);
+pdf.text("الاسم: "+t.name,10,40);
+pdf.text("الرقم الوطني: "+t.nationalId,10,50);
+pdf.text("الفرع: "+t.branch,10,60);
+pdf.save(t.name+".pdf");
+}
+</script>
+
+</body>
+</html>
