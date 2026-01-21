@@ -16,7 +16,7 @@ input{width:100%;padding:6px;margin-bottom:6px}
 display:flex;justify-content:space-between;align-items:center}
 .hidden{display:none}
 .counter{margin:8px 0;font-weight:bold}
-.photo{width:100px;border-radius:6px}
+.photo{width:120px;border-radius:6px;margin-top:6px}
 
 #viewer{
 position:fixed;top:0;left:0;right:0;bottom:0;
@@ -37,28 +37,29 @@ background:#fff;padding:15px;border-radius:8px;max-width:90%
 </header>
 
 <div class="container">
-  <button id="btnAdd">➕ إضافة أستاذ</button>
-  <button id="btnList">📋 عرض الأساتذة</button>
 
-  <input id="search" placeholder="بحث بالاسم أو الرقم الوطني">
+<button id="btnAdd">➕ إضافة أستاذ</button>
+<button id="btnList">📋 عرض الأساتذة</button>
 
-  <div class="counter" id="count"></div>
+<input id="search" placeholder="بحث بالاسم أو الرقم الوطني">
 
-  <!-- النموذج -->
-  <div id="form" class="hidden">
-    <input id="name" placeholder="اسم الأستاذ">
-    <input id="birth" placeholder="تاريخ ومحل الميلاد">
-    <input id="nid" placeholder="الرقم الوطني">
-    <input id="join" placeholder="تاريخ الالتحاق">
-    <input id="branch" placeholder="الفرع">
-    <input id="skill" placeholder="الكفاءة">
-    <input type="file" id="photo">
-    <button id="btnSave">💾 حفظ</button>
-    <button id="btnCloseForm">❌ إغلاق</button>
-  </div>
+<div class="counter" id="count"></div>
 
-  <!-- اللائحة -->
-  <div id="list" class="hidden"></div>
+<!-- نموذج الإدخال -->
+<div id="form" class="hidden">
+  <input id="name" placeholder="اسم الأستاذ">
+  <input id="birth" placeholder="تاريخ ومحل الميلاد">
+  <input id="nid" placeholder="الرقم الوطني">
+  <input id="join" placeholder="تاريخ الالتحاق">
+  <input id="branch" placeholder="الفرع">
+  <input id="skill" placeholder="الكفاءة">
+  <input type="file" id="photo">
+  <button type="button" id="btnSave">💾 حفظ</button>
+  <button type="button" id="btnCancel">❌ إلغاء</button>
+</div>
+
+<!-- اللائحة -->
+<div id="list" class="hidden"></div>
 </div>
 
 <!-- نافذة العرض -->
@@ -70,13 +71,10 @@ background:#fff;padding:15px;border-radius:8px;max-width:90%
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-/* عناصر DOM */
 const form = document.getElementById("form");
 const list = document.getElementById("list");
 const count = document.getElementById("count");
 const search = document.getElementById("search");
-const viewer = document.getElementById("viewer");
-const viewerBox = document.getElementById("viewerBox");
 
 const nameI = document.getElementById("name");
 const birthI = document.getElementById("birth");
@@ -86,120 +84,136 @@ const branchI = document.getElementById("branch");
 const skillI = document.getElementById("skill");
 const photoI = document.getElementById("photo");
 
+const viewer = document.getElementById("viewer");
+const viewerBox = document.getElementById("viewerBox");
+
 let editIndex = null;
 
 /* تخزين */
 function getData(){
   return JSON.parse(localStorage.getItem("teachers") || "[]");
 }
+function saveData(d){
+  localStorage.setItem("teachers", JSON.stringify(d));
+}
 
-/* أزرار */
-document.getElementById("btnAdd").onclick = () => {
+/* أزرار رئيسية */
+btnAdd.onclick = ()=>{
   form.classList.remove("hidden");
   list.classList.add("hidden");
+  editIndex = null;
 };
 
-document.getElementById("btnList").onclick = () => {
+btnList.onclick = ()=>{
   form.classList.add("hidden");
   list.classList.remove("hidden");
   render();
 };
 
-document.getElementById("btnCloseForm").onclick = () => {
-  form.classList.add("hidden");
+btnCancel.onclick = ()=>{
   clearForm();
+  form.classList.add("hidden");
 };
 
-document.getElementById("btnSave").onclick = save;
-search.oninput = render;
+/* حفظ + تعديل */
+btnSave.onclick = ()=>{
+  let data = getData();
+  let oldPhoto = editIndex!==null ? data[editIndex].photo : "";
 
-/* حفظ */
-function save(){
-  const data = getData();
-  const oldPhoto = editIndex !== null ? data[editIndex].photo : "";
-
-  const file = photoI.files[0];
-  if(file){
-    const r = new FileReader();
-    r.onload = () => finishSave(r.result);
-    r.readAsDataURL(file);
-  }else{
-    finishSave(oldPhoto);
-  }
-}
-
-function finishSave(photoData){
-  const data = getData();
-  const obj = {
-    name: nameI.value,
-    birth: birthI.value,
-    nid: nidI.value,
-    join: joinI.value,
-    branch: branchI.value,
-    skill: skillI.value,
-    photo: photoData || ""
+  let teacher = {
+    name: nameI.value.trim(),
+    birth: birthI.value.trim(),
+    nid: nidI.value.trim(),
+    join: joinI.value.trim(),
+    branch: branchI.value.trim(),
+    skill: skillI.value.trim(),
+    photo: oldPhoto
   };
 
-  editIndex === null ? data.push(obj) : data[editIndex] = obj;
-  localStorage.setItem("teachers", JSON.stringify(data));
+  if(photoI.files[0]){
+    let r = new FileReader();
+    r.onload = ()=>{
+      teacher.photo = r.result;
+      finishSave(teacher);
+    };
+    r.readAsDataURL(photoI.files[0]);
+  }else{
+    finishSave(teacher);
+  }
+};
 
-  editIndex = null;
+function finishSave(t){
+  let data = getData();
+  if(editIndex===null) data.push(t);
+  else data[editIndex]=t;
+
+  saveData(data);
   clearForm();
   form.classList.add("hidden");
   list.classList.remove("hidden");
   render();
 }
 
-/* عرض */
-function render(){
-  const q = search.value || "";
-  const data = getData().filter(t =>
-    t.name.includes(q) || t.nid.includes(q)
-  );
+/* تفريغ */
+function clearForm(){
+  nameI.value=birthI.value=nidI.value=joinI.value=branchI.value=skillI.value="";
+  photoI.value="";
+}
 
-  list.innerHTML = "";
-  count.innerText = "عدد الأساتذة: " + data.length;
+/* عرض اللائحة + بحث */
+search.oninput = render;
+
+function render(){
+  let q = search.value || "";
+  let data = getData().filter(t=>t.name.includes(q)||t.nid.includes(q));
+  list.innerHTML="";
+  count.innerText="عدد الأساتذة: "+data.length;
 
   data.forEach((t,i)=>{
-    list.innerHTML += `
-      <div class="card">
-        <div>${i+1} - ${t.name}</div>
-        <div>
-          <button onclick="view(${i})">عرض</button>
-          <button onclick="edit(${i})">✏️</button>
-          <button onclick="del(${i})">🗑</button>
-        </div>
-      </div>`;
+    list.innerHTML+=`
+    <div class="card">
+      <div>${i+1} - ${t.name}</div>
+      <div>
+        <button onclick="view(${i})">عرض</button>
+        <button onclick="edit(${i})">✏️</button>
+        <button onclick="del(${i})">🗑</button>
+      </div>
+    </div>`;
   });
 }
 
+/* عرض نافذة أستاذ */
 function view(i){
-  const t = getData()[i];
-  viewerBox.innerHTML = `
+  let t = getData()[i];
+  viewerBox.innerHTML=`
     <h3>${t.name}</h3>
     <p>الميلاد: ${t.birth}</p>
     <p>الرقم الوطني: ${t.nid}</p>
-    <p>التحاق: ${t.join}</p>
+    <p>الالتحاق: ${t.join}</p>
     <p>الفرع: ${t.branch}</p>
     <p>الكفاءة: ${t.skill}</p>
-    ${t.photo ? `<img class="photo" src="${t.photo}">` : ""}
+    ${t.photo?`<img class="photo" src="${t.photo}">`:""}
     <br><br>
-    <button onclick="exportPDF()">PDF</button>
+    <button onclick="exportPDF()">📄 PDF</button>
     <button onclick="viewer.style.display='none'">إغلاق</button>
   `;
-  viewer.style.display = "flex";
+  viewer.style.display="flex";
 }
 
+/* PDF عربي + صورة */
 function exportPDF(){
-  html2canvas(viewerBox).then(c=>{
-    const pdf = new jspdf.jsPDF();
-    pdf.addImage(c.toDataURL(),"PNG",10,10,190,0);
+  html2canvas(viewerBox,{scale:2}).then(canvas=>{
+    let pdf = new jspdf.jsPDF("p","mm","a4");
+    let w = 190;
+    let h = canvas.height * w / canvas.width;
+    pdf.addImage(canvas.toDataURL("image/png"),"PNG",10,10,w,h);
     pdf.save("استاذ.pdf");
   });
 }
 
+/* تعديل */
 function edit(i){
-  const t = getData()[i];
+  let t = getData()[i];
   nameI.value=t.name;
   birthI.value=t.birth;
   nidI.value=t.nid;
@@ -211,16 +225,12 @@ function edit(i){
   list.classList.add("hidden");
 }
 
+/* حذف */
 function del(i){
-  const d = getData();
+  let d=getData();
   d.splice(i,1);
-  localStorage.setItem("teachers",JSON.stringify(d));
+  saveData(d);
   render();
-}
-
-function clearForm(){
-  nameI.value=birthI.value=nidI.value=joinI.value=branchI.value=skillI.value="";
-  photoI.value="";
 }
 </script>
 
