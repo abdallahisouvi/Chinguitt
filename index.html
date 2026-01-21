@@ -14,8 +14,8 @@ button{background:#2196f3;color:#fff;border:none;padding:6px 10px;border-radius:
 input{width:100%;padding:6px;margin-bottom:6px}
 .card{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;
 display:flex;justify-content:space-between;align-items:center}
-.counter{margin:8px 0;font-weight:bold}
 .hidden{display:none}
+.counter{margin:8px 0;font-weight:bold}
 .photo{width:100px;border-radius:6px}
 
 #viewer{
@@ -32,36 +32,33 @@ background:#fff;padding:15px;border-radius:8px;max-width:90%
 <body>
 
 <header>
-  <img src="./logo.png">
+  <img src="logo.png">
   <div>إدارة معهد شنقيط</div>
 </header>
 
 <div class="container">
+  <button id="btnAdd">➕ إضافة أستاذ</button>
+  <button id="btnList">📋 عرض الأساتذة</button>
 
-<!-- الأزرار -->
-<button onclick="openForm()">➕ إضافة أستاذ</button>
-<button onclick="showList()">📋 عرض الأساتذة</button>
+  <input id="search" placeholder="بحث بالاسم أو الرقم الوطني">
 
-<!-- البحث -->
-<input id="search" placeholder="بحث بالاسم أو الرقم الوطني" oninput="render()">
+  <div class="counter" id="count"></div>
 
-<div class="counter" id="count"></div>
+  <!-- النموذج -->
+  <div id="form" class="hidden">
+    <input id="name" placeholder="اسم الأستاذ">
+    <input id="birth" placeholder="تاريخ ومحل الميلاد">
+    <input id="nid" placeholder="الرقم الوطني">
+    <input id="join" placeholder="تاريخ الالتحاق">
+    <input id="branch" placeholder="الفرع">
+    <input id="skill" placeholder="الكفاءة">
+    <input type="file" id="photo">
+    <button id="btnSave">💾 حفظ</button>
+    <button id="btnCloseForm">❌ إغلاق</button>
+  </div>
 
-<!-- نموذج الإدخال -->
-<div id="form" class="hidden">
-<input id="name" placeholder="اسم الأستاذ">
-<input id="birth" placeholder="تاريخ ومحل الميلاد">
-<input id="nid" placeholder="الرقم الوطني">
-<input id="join" placeholder="تاريخ الالتحاق">
-<input id="branch" placeholder="الفرع">
-<input id="skill" placeholder="الكفاءة">
-<input type="file" id="photo">
-<button onclick="save()">💾 حفظ</button>
-<button onclick="closeForm()">❌ إغلاق</button>
-</div>
-
-<!-- اللائحة -->
-<div id="list" class="hidden"></div>
+  <!-- اللائحة -->
+  <div id="list" class="hidden"></div>
 </div>
 
 <!-- نافذة العرض -->
@@ -73,85 +70,159 @@ background:#fff;padding:15px;border-radius:8px;max-width:90%
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
+/* عناصر DOM */
+const form = document.getElementById("form");
+const list = document.getElementById("list");
+const count = document.getElementById("count");
+const search = document.getElementById("search");
+const viewer = document.getElementById("viewer");
+const viewerBox = document.getElementById("viewerBox");
+
+const nameI = document.getElementById("name");
+const birthI = document.getElementById("birth");
+const nidI = document.getElementById("nid");
+const joinI = document.getElementById("join");
+const branchI = document.getElementById("branch");
+const skillI = document.getElementById("skill");
+const photoI = document.getElementById("photo");
+
 let editIndex = null;
 
+/* تخزين */
 function getData(){
- return JSON.parse(localStorage.getItem("teachers") || "[]");
+  return JSON.parse(localStorage.getItem("teachers") || "[]");
 }
 
 /* أزرار */
-function openForm(){
- form.classList.remove("hidden");
- list.classList.add("hidden");
-}
-function closeForm(){
- form.classList.add("hidden");
- clearForm();
-}
-function showList(){
- list.classList.remove("hidden");
- form.classList.add("hidden");
- render();
-}
+document.getElementById("btnAdd").onclick = () => {
+  form.classList.remove("hidden");
+  list.classList.add("hidden");
+};
+
+document.getElementById("btnList").onclick = () => {
+  form.classList.add("hidden");
+  list.classList.remove("hidden");
+  render();
+};
+
+document.getElementById("btnCloseForm").onclick = () => {
+  form.classList.add("hidden");
+  clearForm();
+};
+
+document.getElementById("btnSave").onclick = save;
+search.oninput = render;
 
 /* حفظ */
 function save(){
- let data = getData();
- let oldPhoto = editIndex!==null ? data[editIndex].photo : "";
+  const data = getData();
+  const oldPhoto = editIndex !== null ? data[editIndex].photo : "";
 
- let f = photo.files[0];
- if(f){
-  let r=new FileReader();
-  r.onload=()=>finishSave(r.result);
-  r.readAsDataURL(f);
- }else{
-  finishSave(oldPhoto);
- }
+  const file = photoI.files[0];
+  if(file){
+    const r = new FileReader();
+    r.onload = () => finishSave(r.result);
+    r.readAsDataURL(file);
+  }else{
+    finishSave(oldPhoto);
+  }
 }
 
 function finishSave(photoData){
- let data = getData();
- let obj={
-  name:name.value.trim(),
-  birth:birth.value.trim(),
-  nid:nid.value.trim(),
-  join:join.value.trim(),
-  branch:branch.value.trim(),
-  skill:skill.value.trim(),
-  photo:photoData||""
- };
- editIndex===null?data.push(obj):data[editIndex]=obj;
- localStorage.setItem("teachers",JSON.stringify(data));
- editIndex=null;
- clearForm();
- render();
+  const data = getData();
+  const obj = {
+    name: nameI.value,
+    birth: birthI.value,
+    nid: nidI.value,
+    join: joinI.value,
+    branch: branchI.value,
+    skill: skillI.value,
+    photo: photoData || ""
+  };
+
+  editIndex === null ? data.push(obj) : data[editIndex] = obj;
+  localStorage.setItem("teachers", JSON.stringify(data));
+
+  editIndex = null;
+  clearForm();
+  form.classList.add("hidden");
+  list.classList.remove("hidden");
+  render();
 }
 
-/* عرض اللائحة + البحث */
+/* عرض */
 function render(){
- let q=search.value||"";
- let data=getData().filter(t=>t.name.includes(q)||t.nid.includes(q));
- list.innerHTML="";
- count.innerText="عدد الأساتذة: "+data.length;
+  const q = search.value || "";
+  const data = getData().filter(t =>
+    t.name.includes(q) || t.nid.includes(q)
+  );
 
- data.forEach((t,i)=>{
-  list.innerHTML+=`
-  <div class="card">
-   <div>${i+1} - ${t.name}</div>
-   <div>
-    <button onclick="view(${i})">عرض</button>
-    <button onclick="edit(${i})">✏️</button>
-    <button onclick="del(${i})">🗑</button>
-   </div>
-  </div>`;
- });
+  list.innerHTML = "";
+  count.innerText = "عدد الأساتذة: " + data.length;
+
+  data.forEach((t,i)=>{
+    list.innerHTML += `
+      <div class="card">
+        <div>${i+1} - ${t.name}</div>
+        <div>
+          <button onclick="view(${i})">عرض</button>
+          <button onclick="edit(${i})">✏️</button>
+          <button onclick="del(${i})">🗑</button>
+        </div>
+      </div>`;
+  });
 }
 
-/* عرض فردي */
 function view(i){
- let t=getData()[i];
- viewerBox.innerHTML=`
- <h3>${t.name}</h3>
- <p>الميلاد: ${t.birth}</p>
- <p>الرقم الوطني: ${t.nid}</p>
- <p>الالتحاق: ${t.join}<
+  const t = getData()[i];
+  viewerBox.innerHTML = `
+    <h3>${t.name}</h3>
+    <p>الميلاد: ${t.birth}</p>
+    <p>الرقم الوطني: ${t.nid}</p>
+    <p>التحاق: ${t.join}</p>
+    <p>الفرع: ${t.branch}</p>
+    <p>الكفاءة: ${t.skill}</p>
+    ${t.photo ? `<img class="photo" src="${t.photo}">` : ""}
+    <br><br>
+    <button onclick="exportPDF()">PDF</button>
+    <button onclick="viewer.style.display='none'">إغلاق</button>
+  `;
+  viewer.style.display = "flex";
+}
+
+function exportPDF(){
+  html2canvas(viewerBox).then(c=>{
+    const pdf = new jspdf.jsPDF();
+    pdf.addImage(c.toDataURL(),"PNG",10,10,190,0);
+    pdf.save("استاذ.pdf");
+  });
+}
+
+function edit(i){
+  const t = getData()[i];
+  nameI.value=t.name;
+  birthI.value=t.birth;
+  nidI.value=t.nid;
+  joinI.value=t.join;
+  branchI.value=t.branch;
+  skillI.value=t.skill;
+  editIndex=i;
+  form.classList.remove("hidden");
+  list.classList.add("hidden");
+}
+
+function del(i){
+  const d = getData();
+  d.splice(i,1);
+  localStorage.setItem("teachers",JSON.stringify(d));
+  render();
+}
+
+function clearForm(){
+  nameI.value=birthI.value=nidI.value=joinI.value=branchI.value=skillI.value="";
+  photoI.value="";
+}
+</script>
+
+</body>
+</html>
