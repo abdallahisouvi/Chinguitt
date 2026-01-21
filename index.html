@@ -17,9 +17,15 @@ display:flex;justify-content:space-between;align-items:center}
 .counter{margin:8px 0;font-weight:bold}
 .hidden{display:none}
 .photo{width:100px;border-radius:6px}
-#viewer{position:fixed;top:0;left:0;right:0;bottom:0;
-background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
-#viewer .box{background:#fff;padding:15px;border-radius:8px;max-width:90%}
+
+#viewer{
+position:fixed;top:0;left:0;right:0;bottom:0;
+background:rgba(0,0,0,.6);
+display:none;align-items:center;justify-content:center
+}
+#viewer .box{
+background:#fff;padding:15px;border-radius:8px;max-width:90%
+}
 </style>
 </head>
 
@@ -31,12 +37,17 @@ background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center
 </header>
 
 <div class="container">
-<button onclick="toggleForm()">➕ إضافة أستاذ</button>
-<button onclick="render()">📋 عرض الأساتذة</button>
+
+<!-- الأزرار -->
+<button onclick="openForm()">➕ إضافة أستاذ</button>
+<button onclick="showList()">📋 عرض الأساتذة</button>
+
+<!-- البحث -->
+<input id="search" placeholder="بحث بالاسم أو الرقم الوطني" oninput="render()">
 
 <div class="counter" id="count"></div>
 
-<!-- نموذج -->
+<!-- نموذج الإدخال -->
 <div id="form" class="hidden">
 <input id="name" placeholder="اسم الأستاذ">
 <input id="birth" placeholder="تاريخ ومحل الميلاد">
@@ -46,9 +57,11 @@ background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center
 <input id="skill" placeholder="الكفاءة">
 <input type="file" id="photo">
 <button onclick="save()">💾 حفظ</button>
+<button onclick="closeForm()">❌ إغلاق</button>
 </div>
 
-<div id="list"></div>
+<!-- اللائحة -->
+<div id="list" class="hidden"></div>
 </div>
 
 <!-- نافذة العرض -->
@@ -63,114 +76,82 @@ background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center
 let editIndex = null;
 
 function getData(){
-  return JSON.parse(localStorage.getItem("teachers") || "[]");
+ return JSON.parse(localStorage.getItem("teachers") || "[]");
 }
 
-function save(){
-  let data = getData();
-  let oldPhoto = editIndex !== null ? data[editIndex].photo : "";
+/* أزرار */
+function openForm(){
+ form.classList.remove("hidden");
+ list.classList.add("hidden");
+}
+function closeForm(){
+ form.classList.add("hidden");
+ clearForm();
+}
+function showList(){
+ list.classList.remove("hidden");
+ form.classList.add("hidden");
+ render();
+}
 
-  let file = photo.files[0];
-  if(file){
-    let reader = new FileReader();
-    reader.onload = () => finishSave(reader.result);
-    reader.readAsDataURL(file);
-  }else{
-    finishSave(oldPhoto);
-  }
+/* حفظ */
+function save(){
+ let data = getData();
+ let oldPhoto = editIndex!==null ? data[editIndex].photo : "";
+
+ let f = photo.files[0];
+ if(f){
+  let r=new FileReader();
+  r.onload=()=>finishSave(r.result);
+  r.readAsDataURL(f);
+ }else{
+  finishSave(oldPhoto);
+ }
 }
 
 function finishSave(photoData){
-  let data = getData();
-  let obj = {
-    name: name.value.trim(),
-    birth: birth.value.trim(),
-    nid: nid.value.trim(),
-    join: join.value.trim(),
-    branch: branch.value.trim(),
-    skill: skill.value.trim(),
-    photo: photoData || ""
-  };
-
-  if(editIndex === null) data.push(obj);
-  else data[editIndex] = obj;
-
-  localStorage.setItem("teachers", JSON.stringify(data));
-  editIndex = null;
-  clearForm();
-  render();
+ let data = getData();
+ let obj={
+  name:name.value.trim(),
+  birth:birth.value.trim(),
+  nid:nid.value.trim(),
+  join:join.value.trim(),
+  branch:branch.value.trim(),
+  skill:skill.value.trim(),
+  photo:photoData||""
+ };
+ editIndex===null?data.push(obj):data[editIndex]=obj;
+ localStorage.setItem("teachers",JSON.stringify(data));
+ editIndex=null;
+ clearForm();
+ render();
 }
 
+/* عرض اللائحة + البحث */
 function render(){
-  let data = getData();
-  list.innerHTML = "";
-  count.innerText = "عدد الأساتذة: " + data.length;
+ let q=search.value||"";
+ let data=getData().filter(t=>t.name.includes(q)||t.nid.includes(q));
+ list.innerHTML="";
+ count.innerText="عدد الأساتذة: "+data.length;
 
-  data.forEach((t,i)=>{
-    list.innerHTML += `
-    <div class="card">
-      <div>${i+1}. ${t.name}</div>
-      <div>
-        <button onclick="view(${i})">عرض</button>
-        <button onclick="edit(${i})">تعديل</button>
-        <button onclick="del(${i})">حذف</button>
-      </div>
-    </div>`;
-  });
+ data.forEach((t,i)=>{
+  list.innerHTML+=`
+  <div class="card">
+   <div>${i+1} - ${t.name}</div>
+   <div>
+    <button onclick="view(${i})">عرض</button>
+    <button onclick="edit(${i})">✏️</button>
+    <button onclick="del(${i})">🗑</button>
+   </div>
+  </div>`;
+ });
 }
 
+/* عرض فردي */
 function view(i){
-  let t = getData()[i];
-  viewerBox.innerHTML = `
-    <h3>${t.name}</h3>
-    <p>الميلاد: ${t.birth}</p>
-    <p>الرقم الوطني: ${t.nid}</p>
-    <p>الالتحاق: ${t.join}</p>
-    <p>الفرع: ${t.branch}</p>
-    <p>الكفاءة: ${t.skill}</p>
-    ${t.photo ? `<img class="photo" src="${t.photo}">` : ""}
-    <br><br>
-    <button onclick="exportPDF()">📄 PDF</button>
-    <button onclick="closeView()">❌ إغلاق</button>
-  `;
-  viewer.style.display="flex";
-}
-
-function closeView(){
-  viewer.style.display="none";
-}
-
-function exportPDF(){
-  html2canvas(viewerBox).then(canvas=>{
-    let pdf = new jspdf.jsPDF();
-    pdf.addImage(canvas.toDataURL("image/png"),"PNG",10,10,190,0);
-    pdf.save("استاذ.pdf");
-  });
-}
-
-function edit(i){
-  let t = getData()[i];
-  name.value = t.name;
-  birth.value = t.birth;
-  nid.value = t.nid;
-  join.value = t.join;
-  branch.value = t.branch;
-  skill.value = t.skill;
-  editIndex = i;
-  toggleForm(true);
-}
-
-function del(i){
-  let d = getData();
-  d.splice(i,1);
-  localStorage.setItem("teachers", JSON.stringify(d));
-  render();
-}
-
-function toggleForm(show){
-  form.classList.toggle("hidden", show===false);
-}
-
-function clearForm(){
-  name.value=birth.value=nid.value=join.value=branch.value=skill.value="";
-  pho
+ let t=getData()[i];
+ viewerBox.innerHTML=`
+ <h3>${t.name}</h3>
+ <p>الميلاد: ${t.birth}</p>
+ <p>الرقم الوطني: ${t.nid}</p>
+ <p>الالتحاق: ${t.join}<
