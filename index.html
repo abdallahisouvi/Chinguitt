@@ -3,59 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <title>إدارة معهد شنقيط</title>
-
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body {
-  font-family: Tahoma, Arial;
-  background: #f4f6f8;
-  margin: 0;
-}
-header {
-  background: #2196f3;
-  color: white;
-  padding: 10px;
-  text-align: center;
-}
-header img {
-  width: 60px;
-  border-radius: 50%;
-}
-.container {
-  padding: 10px;
-}
-button {
-  background: #2196f3;
-  color: white;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 5px;
-  margin: 2px;
-}
-input {
-  width: 100%;
-  padding: 6px;
-  margin-bottom: 6px;
-}
-.card {
-  background: white;
-  padding: 8px;
-  margin-bottom: 6px;
-  border-radius: 6px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.counter {
-  margin: 8px 0;
-  font-weight: bold;
-}
-.hidden { display: none; }
-img.photo {
-  width: 100px;
-  border-radius: 6px;
-}
+body{font-family:Tahoma,Arial;background:#f4f6f8;margin:0}
+header{background:#2196f3;color:#fff;text-align:center;padding:10px}
+header img{width:60px;border-radius:50%}
+.container{padding:10px}
+button{background:#2196f3;color:#fff;border:none;padding:6px 10px;border-radius:5px;margin:2px}
+input{width:100%;padding:6px;margin-bottom:6px}
+.card{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;
+display:flex;justify-content:space-between;align-items:center}
+.counter{margin:8px 0;font-weight:bold}
+.hidden{display:none}
+.photo{width:100px;border-radius:6px}
+#viewer{position:fixed;top:0;left:0;right:0;bottom:0;
+background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+#viewer .box{background:#fff;padding:15px;border-radius:8px;max-width:90%}
 </style>
 </head>
 
@@ -67,30 +31,31 @@ img.photo {
 </header>
 
 <div class="container">
-
-<button onclick="showForm()">➕ إضافة أستاذ</button>
+<button onclick="toggleForm()">➕ إضافة أستاذ</button>
 <button onclick="render()">📋 عرض الأساتذة</button>
 
 <div class="counter" id="count"></div>
 
-<!-- نموذج الإدخال -->
+<!-- نموذج -->
 <div id="form" class="hidden">
-  <input id="name" placeholder="اسم الأستاذ">
-  <input id="birth" placeholder="تاريخ ومحل الميلاد">
-  <input id="nid" placeholder="الرقم الوطني">
-  <input id="join" placeholder="تاريخ الالتحاق">
-  <input id="branch" placeholder="الفرع">
-  <input id="skill" placeholder="الكفاءة">
-  <input type="file" id="photo">
-  <button onclick="save()">💾 حفظ</button>
+<input id="name" placeholder="اسم الأستاذ">
+<input id="birth" placeholder="تاريخ ومحل الميلاد">
+<input id="nid" placeholder="الرقم الوطني">
+<input id="join" placeholder="تاريخ الالتحاق">
+<input id="branch" placeholder="الفرع">
+<input id="skill" placeholder="الكفاءة">
+<input type="file" id="photo">
+<button onclick="save()">💾 حفظ</button>
 </div>
 
-<!-- اللائحة -->
 <div id="list"></div>
-
 </div>
 
-<!-- مكتبات PDF -->
+<!-- نافذة العرض -->
+<div id="viewer">
+  <div class="box" id="viewerBox"></div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -102,32 +67,38 @@ function getData(){
 }
 
 function save(){
-  let reader = new FileReader();
-  let file = document.getElementById("photo").files[0];
+  let data = getData();
+  let oldPhoto = editIndex !== null ? data[editIndex].photo : "";
 
-  reader.onload = function(){
-    let data = getData();
-    let obj = {
-      name: name.value,
-      birth: birth.value,
-      nid: nid.value,
-      join: join.value,
-      branch: branch.value,
-      skill: skill.value,
-      photo: reader.result
-    };
+  let file = photo.files[0];
+  if(file){
+    let reader = new FileReader();
+    reader.onload = () => finishSave(reader.result);
+    reader.readAsDataURL(file);
+  }else{
+    finishSave(oldPhoto);
+  }
+}
 
-    if(editIndex === null) data.push(obj);
-    else data[editIndex] = obj;
-
-    localStorage.setItem("teachers", JSON.stringify(data));
-    editIndex = null;
-    document.getElementById("form").classList.add("hidden");
-    render();
+function finishSave(photoData){
+  let data = getData();
+  let obj = {
+    name: name.value.trim(),
+    birth: birth.value.trim(),
+    nid: nid.value.trim(),
+    join: join.value.trim(),
+    branch: branch.value.trim(),
+    skill: skill.value.trim(),
+    photo: photoData || ""
   };
 
-  if(file) reader.readAsDataURL(file);
-  else reader.onload();
+  if(editIndex === null) data.push(obj);
+  else data[editIndex] = obj;
+
+  localStorage.setItem("teachers", JSON.stringify(data));
+  editIndex = null;
+  clearForm();
+  render();
 }
 
 function render(){
@@ -150,27 +121,29 @@ function render(){
 
 function view(i){
   let t = getData()[i];
-  let box = document.createElement("div");
-  box.style.background = "white";
-  box.style.padding = "10px";
-  box.innerHTML = `
+  viewerBox.innerHTML = `
     <h3>${t.name}</h3>
     <p>الميلاد: ${t.birth}</p>
     <p>الرقم الوطني: ${t.nid}</p>
     <p>الالتحاق: ${t.join}</p>
     <p>الفرع: ${t.branch}</p>
     <p>الكفاءة: ${t.skill}</p>
-    <img class="photo" src="${t.photo}">
+    ${t.photo ? `<img class="photo" src="${t.photo}">` : ""}
     <br><br>
-    <button onclick="exportPDF(this.parentNode)">📄 PDF</button>
+    <button onclick="exportPDF()">📄 PDF</button>
+    <button onclick="closeView()">❌ إغلاق</button>
   `;
-  document.body.appendChild(box);
+  viewer.style.display="flex";
 }
 
-function exportPDF(el){
-  html2canvas(el).then(canvas=>{
-    const pdf = new jspdf.jsPDF();
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 10, 10, 190, 0);
+function closeView(){
+  viewer.style.display="none";
+}
+
+function exportPDF(){
+  html2canvas(viewerBox).then(canvas=>{
+    let pdf = new jspdf.jsPDF();
+    pdf.addImage(canvas.toDataURL("image/png"),"PNG",10,10,190,0);
     pdf.save("استاذ.pdf");
   });
 }
@@ -184,7 +157,7 @@ function edit(i){
   branch.value = t.branch;
   skill.value = t.skill;
   editIndex = i;
-  showForm();
+  toggleForm(true);
 }
 
 function del(i){
@@ -194,12 +167,10 @@ function del(i){
   render();
 }
 
-function showForm(){
-  document.getElementById("form").classList.toggle("hidden");
+function toggleForm(show){
+  form.classList.toggle("hidden", show===false);
 }
 
-render();
-</script>
-
-</body>
-</html>
+function clearForm(){
+  name.value=birth.value=nid.value=join.value=branch.value=skill.value="";
+  pho
