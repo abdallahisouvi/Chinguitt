@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إدارة معهد شنقيط</title>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body {
+  font-family: Arial;
+  background: #f5f5f5;
+  margin: 10px;
+}
+h2 {
+  text-align: center;
+  color: green;
+}
+input, textarea, button {
+  width: 100%;
+  padding: 8px;
+  margin: 4px 0;
+}
+button {
+  background: green;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 5px;
+  text-align: center;
+}
+img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+}
+.action-btn {
+  background: #555;
+  margin: 2px;
+}
+.delete {
+  background: red;
+}
+</style>
+</head>
+
+<body>
+
+<h2>إدارة معهد شنقيط</h2>
+
+<input id="name" placeholder="اسم الأستاذ">
+<input id="birthDate" placeholder="تاريخ الميلاد">
+<input id="birthPlace" placeholder="محل الميلاد">
+<input id="nationalId" placeholder="الرقم الوطني">
+<input id="joinDate" placeholder="تاريخ الالتحاق">
+<input id="branch" placeholder="الفرع">
+<input id="skill" placeholder="الكفاءة">
+<textarea id="note" placeholder="ملاحظة"></textarea>
+<input type="file" id="image">
+
+<button onclick="saveTeacher()">حفظ</button>
+
+<hr>
+
+<input placeholder="بحث بالاسم أو الرقم الوطني" onkeyup="search(this.value)">
+
+<button onclick="exportAllPdf()">تصدير جميع الأساتذة PDF</button>
+
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>الصورة</th>
+<th>الاسم</th>
+<th>الرقم</th>
+<th>الفرع</th>
+<th>إجراءات</th>
+</tr>
+</thead>
+<tbody id="list"></tbody>
+</table>
+
+<script>
+let teachers = JSON.parse(localStorage.getItem("teachers") || "[]");
+let editIndex = null;
+
+function saveTeacher() {
+  const imgInput = document.getElementById("image");
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    const data = {
+      name: name.value,
+      birthDate: birthDate.value,
+      birthPlace: birthPlace.value,
+      nationalId: nationalId.value,
+      joinDate: joinDate.value,
+      branch: branch.value,
+      skill: skill.value,
+      note: note.value,
+      image: reader.result
+    };
+
+    if (editIndex !== null) {
+      teachers[editIndex] = data;
+      editIndex = null;
+    } else {
+      teachers.push(data);
+    }
+
+    localStorage.setItem("teachers", JSON.stringify(teachers));
+    clearForm();
+    render();
+  };
+
+  if (imgInput.files[0]) reader.readAsDataURL(imgInput.files[0]);
+  else reader.onload();
+}
+
+function render(list = teachers) {
+  const tbody = document.getElementById("list");
+  tbody.innerHTML = "";
+  list.forEach((t, i) => {
+    tbody.innerHTML += `
+    <tr>
+      <td>${i + 1}</td>
+      <td><img src="${t.image || ''}"></td>
+      <td>${t.name}</td>
+      <td>${t.nationalId}</td>
+      <td>${t.branch}</td>
+      <td>
+        <button class="action-btn" onclick="edit(${i})">تعديل</button>
+        <button class="action-btn delete" onclick="del(${i})">حذف</button>
+        <button class="action-btn" onclick="singlePdf(${i})">PDF</button>
+      </td>
+    </tr>`;
+  });
+}
+
+function edit(i) {
+  const t = teachers[i];
+  name.value = t.name;
+  birthDate.value = t.birthDate;
+  birthPlace.value = t.birthPlace;
+  nationalId.value = t.nationalId;
+  joinDate.value = t.joinDate;
+  branch.value = t.branch;
+  skill.value = t.skill;
+  note.value = t.note;
+  editIndex = i;
+}
+
+function del(i) {
+  if (confirm("حذف الأستاذ؟")) {
+    teachers.splice(i, 1);
+    localStorage.setItem("teachers", JSON.stringify(teachers));
+    render();
+  }
+}
+
+function search(v) {
+  render(
+    teachers.filter(t =>
+      t.name.includes(v) || t.nationalId.includes(v)
+    )
+  );
+}
+
+function exportAllPdf() {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  pdf.text("إدارة معهد شنقيط", 80, 10);
+
+  let y = 20;
+  teachers.forEach((t, i) => {
+    pdf.text(`${i + 1}- ${t.name} | ${t.nationalId}`, 10, y);
+    y += 8;
+  });
+
+  pdf.save("teachers.pdf");
+}
+
+function singlePdf(i) {
+  const { jsPDF } = window.jspdf;
+  const t = teachers[i];
+  const pdf = new jsPDF();
+
+  pdf.text("تقرير أستاذ – معهد شنقيط", 60, 10);
+  pdf.text("الاسم: " + t.name, 10, 30);
+  pdf.text("الرقم الوطني: " + t.nationalId, 10, 40);
+  pdf.text("الفرع: " + t.branch, 10, 50);
+  pdf.text("الكفاءة: " + t.skill, 10, 60);
+  pdf.text("ملاحظة: " + t.note, 10, 70);
+
+  if (t.image) {
+    pdf.addImage(t.image, "JPEG", 140, 30, 40, 40);
+  }
+
+  pdf.save(t.name + ".pdf");
+}
+
+function clearForm() {
+  document.querySelectorAll("input,textarea").forEach(e => e.value = "");
+}
+
+render();
+</script>
+
+</body>
+</html>
