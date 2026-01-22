@@ -141,7 +141,8 @@ async function uploadImage(file,id){
 
 // 💾 Save
 async function saveTeacher(){
-  const id = editIndex ?? Date.now();
+  const id = (editIndex !== null) ? teachers[editIndex].id : Date.now();
+
   let imageUrl = "";
 
   if(image.files[0]){
