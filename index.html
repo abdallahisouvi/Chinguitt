@@ -2,160 +2,182 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>نظام إدارة الأساتذة</title>
+<title>إدارة معهد شنقيط</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-
 <style>
-body{font-family:Cairo;background:#eef1f4;margin:0;padding:10px}
-h2{text-align:center}
+body{font-family:Tahoma,Arial;background:#f4f6f8;margin:0}
+header{background:#2196f3;color:#fff;text-align:center;padding:10px}
+header img{width:60px;border-radius:50%}
+.container{padding:10px}
+button{background:#2196f3;color:#fff;border:none;padding:6px 10px;border-radius:5px;margin:2px}
+input{width:100%;padding:6px;margin-bottom:6px}
+.card{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;
+display:flex;justify-content:space-between;align-items:center}
 .hidden{display:none}
-input,button{width:100%;padding:8px;margin:5px 0}
-.card{background:#fff;padding:10px;margin:8px 0;border-radius:8px}
-img{width:70px;height:70px;border-radius:50%;object-fit:cover}
-table{width:100%;border-collapse:collapse}
-td,th{border:1px solid #ccc;padding:6px;text-align:center}
-button{background:#0a7cff;color:#fff;border:0;border-radius:6px}
+.counter{margin:8px 0;font-weight:bold}
+.photo{width:100px;border-radius:6px}
 </style>
 </head>
 
 <body>
 
-<!-- 🔐 LOGIN -->
-<div id="login">
-  <h2>🔐 دخول المدير</h2>
-  <input id="email" placeholder="البريد">
-  <input id="password" type="password" placeholder="كلمة المرور">
-  <button onclick="login()">دخول</button>
+<header>
+  <img src="logo.png">
+  <div>إدارة معهد شنقيط</div>
+</header>
+
+<div class="container">
+
+<button id="btnAdd">➕ إضافة أستاذ</button>
+<button id="btnList">📋 عرض الأساتذة</button>
+
+<input id="search" placeholder="بحث بالاسم أو الرقم الوطني">
+
+<div class="counter" id="count"></div>
+
+<!-- نموذج الإدخال -->
+<div id="form" class="hidden">
+  <input id="name" placeholder="اسم الأستاذ">
+  <input id="birth" placeholder="تاريخ ومحل الميلاد">
+  <input id="nid" placeholder="الرقم الوطني">
+  <input id="join" placeholder="تاريخ الالتحاق">
+  <input id="branch" placeholder="الفرع">
+  <input id="skill" placeholder="الكفاءة">
+  <input type="file" id="photo">
+  <button type="button" id="btnSave">💾 حفظ</button>
+  <button type="button" id="btnClose">❌ إغلاق</button>
 </div>
 
-<!-- 📋 APP -->
-<div id="app" class="hidden">
-<h2>📋 إدارة الأساتذة</h2>
+<!-- اللائحة -->
+<div id="list" class="hidden"></div>
 
-<form id="form">
-  <input id="name" placeholder="اسم الأستاذ" required>
-  <input id="subject" placeholder="المادة" required>
-  <input id="phone" placeholder="الهاتف">
-  <input type="file" id="image">
-  <button>💾 حفظ</button>
-</form>
-
-<h3>📑 اللائحة</h3>
-<div id="list"></div>
-
-<h3>📊 تقرير</h3>
-<table>
-<thead>
-<tr><th>الاسم</th><th>المادة</th><th>الهاتف</th></tr>
-</thead>
-<tbody id="report"></tbody>
-</table>
-
-<button onclick="logout()">🚪 تسجيل الخروج</button>
 </div>
 
 <script>
-/* 🔥 Firebase */
-firebase.initializeApp({
- apiKey:"AIzaSyBljZoIG9rTcz-kTX9o9CL8l3WvciZjyTY",
- authDomain:"chinguitt2718.firebaseapp.com",
- databaseURL:"https://chinguitt2718-default-rtdb.firebaseio.com",
- projectId:"chinguitt2718",
- storageBucket:"chinguitt2718.appspot.com"
-});
+/* عناصر */
+const form = document.getElementById("form");
+const list = document.getElementById("list");
+const count = document.getElementById("count");
+const search = document.getElementById("search");
 
-const auth=firebase.auth();
-const db=firebase.database();
-const storage=firebase.storage();
+const nameI = document.getElementById("name");
+const birthI = document.getElementById("birth");
+const nidI = document.getElementById("nid");
+const joinI = document.getElementById("join");
+const branchI = document.getElementById("branch");
+const skillI = document.getElementById("skill");
+const photoI = document.getElementById("photo");
 
-let teachers=JSON.parse(localStorage.getItem("teachers"))||[];
+let editIndex = null;
 
-/* 🔐 AUTH */
-auth.onAuthStateChanged(u=>{
- if(u){
-   login.classList.add("hidden");
-   app.classList.remove("hidden");
-   loadFromFirebase();
- }else{
-   app.classList.add("hidden");
-   login.classList.remove("hidden");
- }
-});
-
-function login(){
- auth.signInWithEmailAndPassword(email.value,password.value)
- .catch(e=>alert(e.message));
-}
-function logout(){auth.signOut();}
-
-/* ☁️ LOAD ONCE (لا تختفي اللائحة) */
-function loadFromFirebase(){
- db.ref("teachers").once("value",s=>{
-  if(s.exists()){
-    teachers=s.val();
-    localStorage.setItem("teachers",JSON.stringify(teachers));
-    render();
-  }else{
-    render();
-  }
- });
+/* أدوات */
+function getData(){
+  return JSON.parse(localStorage.getItem("teachers") || "[]");
 }
 
-/* 🖼️ IMAGE */
-async function upload(file,id){
- const ref=storage.ref("teachers/"+id+".jpg");
- await ref.put(file);
- return await ref.getDownloadURL();
+function saveData(data){
+  localStorage.setItem("teachers", JSON.stringify(data));
 }
 
-/* 💾 SAVE */
-form.onsubmit=async e=>{
- e.preventDefault();
- const id=Date.now();
- let img="";
- if(image.files[0]) img=await upload(image.files[0],id);
-
- teachers.push({
-   id,
-   name:name.value,
-   subject:subject.value,
-   phone:phone.value,
-   image:img
- });
-
- localStorage.setItem("teachers",JSON.stringify(teachers));
- if(navigator.onLine) db.ref("teachers").set(teachers);
- render();
- form.reset();
+/* أزرار */
+document.getElementById("btnAdd").onclick = () => {
+  form.classList.remove("hidden");
+  list.classList.add("hidden");
 };
 
-/* 🖥️ RENDER */
-function render(){
- list.innerHTML="";
- report.innerHTML="";
- teachers.forEach(t=>{
-   list.innerHTML+=`
-    <div class="card">
-     ${t.image?`<img src="${t.image}"><br>`:""}
-     <b>${t.name}</b><br>
-     ${t.subject}<br>
-     ${t.phone}
-    </div>`;
-   report.innerHTML+=`
-    <tr><td>${t.name}</td><td>${t.subject}</td><td>${t.phone}</td></tr>`;
- });
+document.getElementById("btnList").onclick = () => {
+  form.classList.add("hidden");
+  list.classList.remove("hidden");
+  render();
+};
+
+document.getElementById("btnClose").onclick = () => {
+  clearForm();
+  form.classList.add("hidden");
+};
+
+document.getElementById("btnSave").onclick = () => {
+  saveTeacher();
+};
+
+search.oninput = render;
+
+/* الحفظ (مُصحّح) */
+function saveTeacher(){
+  let data = getData();
+
+  let teacher = {
+    name: nameI.value.trim(),
+    birth: birthI.value.trim(),
+    nid: nidI.value.trim(),
+    join: joinI.value.trim(),
+    branch: branchI.value.trim(),
+    skill: skillI.value.trim(),
+    photo: ""
+  };
+
+  if(photoI.files[0]){
+    let r = new FileReader();
+    r.onload = () => {
+      teacher.photo = r.result;
+      data.push(teacher);
+      finishSave(data);
+    };
+    r.readAsDataURL(photoI.files[0]);
+  } else {
+    data.push(teacher);
+    finishSave(data);
+  }
 }
 
-/* 🌐 AUTO SYNC */
-window.addEventListener("online",()=>{
- db.ref("teachers").set(teachers);
-});
+function finishSave(data){
+  saveData(data);
+  clearForm();
+  form.classList.add("hidden");
+  list.classList.remove("hidden");
+  render();
+}
+
+/* تفريغ الخانات */
+function clearForm(){
+  nameI.value="";
+  birthI.value="";
+  nidI.value="";
+  joinI.value="";
+  branchI.value="";
+  skillI.value="";
+  photoI.value="";
+}
+
+/* عرض اللائحة */
+function render(){
+  let q = search.value || "";
+  let data = getData().filter(t =>
+    t.name.includes(q) || t.nid.includes(q)
+  );
+
+  list.innerHTML="";
+  count.innerText="عدد الأساتذة: "+data.length;
+
+  data.forEach((t,i)=>{
+    list.innerHTML += `
+    <div class="card">
+      <div>${i+1} - ${t.name}</div>
+      <div>
+        <button onclick="alert('العرض لاحقًا')">عرض</button>
+        <button onclick="del(${i})">🗑</button>
+      </div>
+    </div>`;
+  });
+}
+
+function del(i){
+  let d = getData();
+  d.splice(i,1);
+  saveData(d);
+  render();
+}
 </script>
 
 </body>
