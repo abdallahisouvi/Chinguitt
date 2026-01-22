@@ -142,38 +142,44 @@ async function uploadImage(file,id){
 // 💾 Save
 async function saveTeacher(){
   const id = (editIndex !== null) ? teachers[editIndex].id : Date.now();
-
   let imageUrl = "";
 
-  if(image.files[0]){
-    imageUrl = await uploadImage(image.files[0],id);
-  } else if(editIndex !== null){
-    imageUrl = teachers[editIndex].image;
+  try {
+    if(image.files[0]){
+      imageUrl = await uploadImage(image.files[0], id);
+    } else if(editIndex !== null){
+      imageUrl = teachers[editIndex].image;
+    }
+
+    const data = {
+      id: id,
+      name: name.value,
+      birthDate: birthDate.value,
+      birthPlace: birthPlace.value,
+      nationalId: nationalId.value,
+      joinDate: joinDate.value,
+      branch: branch.value,
+      skill: skill.value,
+      note: note.value,
+      image: imageUrl
+    };
+
+    if(editIndex !== null){
+      teachers[editIndex] = data;
+      editIndex = null;
+    } else {
+      teachers.push(data);
+    }
+
+    await teachersRef.set(teachers); // 🔥 حفظ فعلي
+    clearForm();
+    alert("تم الحفظ بنجاح ✔");
+
+  } catch (e) {
+    alert("خطأ في الحفظ: " + e.message);
   }
-
-  const data = {
-    id,
-    name:name.value,
-    birthDate:birthDate.value,
-    birthPlace:birthPlace.value,
-    nationalId:nationalId.value,
-    joinDate:joinDate.value,
-    branch:branch.value,
-    skill:skill.value,
-    note:note.value,
-    image:imageUrl
-  };
-
-  if(editIndex !== null){
-    teachers[editIndex]=data;
-    editIndex=null;
-  } else {
-    teachers.push(data);
-  }
-
-  teachersRef.set(teachers);
-  clearForm();
 }
+
 
 // 📋 Render
 function render(list=teachers){
