@@ -2,196 +2,125 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>إدارة معهد شنقيط</title>
+<title>إدارة الأساتذة</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <style>
-body{
-  font-family:Arial;
-  background:#f4f6f7;
-  margin:10px
-}
-h2{color:#1e8449;text-align:center}
-input,textarea,button{
-  width:100%;padding:8px;margin:4px 0
-}
-button{
-  background:#1e8449;color:white;border:none;cursor:pointer
-}
-table{
-  width:100%;border-collapse:collapse;background:white;margin-top:10px
-}
-th,td{
-  border:1px solid #ccc;padding:6px;text-align:center
-}
-img{
-  width:45px;height:45px;border-radius:50%
-}
-.delete{background:#c0392b}
+body{font-family:Cairo;background:#f4f6f8;margin:0;padding:10px}
+h2{text-align:center}
+form,input,button{width:100%;margin:5px 0;padding:8px}
+.card{background:#fff;padding:10px;margin:8px 0;border-radius:8px}
+img{max-width:80px;border-radius:50%}
 </style>
 </head>
 
 <body>
 
-<h2>إدارة معهد شنقيط</h2>
+<h2>📋 إدارة الأساتذة</h2>
 
-<input id="name" placeholder="اسم الأستاذ">
-<input id="birthDate" placeholder="تاريخ الميلاد">
-<input id="birthPlace" placeholder="محل الميلاد">
-<input id="nationalId" placeholder="الرقم الوطني">
-<input id="joinDate" placeholder="تاريخ الالتحاق">
-<input id="branch" placeholder="الفرع">
-<input id="skill" placeholder="الكفاءة">
-<textarea id="note" placeholder="ملاحظات"></textarea>
+<form id="teacherForm">
+<input id="name" placeholder="اسم الأستاذ" required>
+<input id="subject" placeholder="المادة" required>
+<input id="phone" placeholder="الهاتف">
 <input type="file" id="image">
+<button type="submit">💾 حفظ</button>
+</form>
 
-<button onclick="saveTeacher()">حفظ</button>
-
-<hr>
-
-<input placeholder="بحث بالاسم أو الرقم" onkeyup="search(this.value)">
-
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>الصورة</th>
-<th>الاسم</th>
-<th>الرقم</th>
-<th>الفرع</th>
-<th>الكفاءة</th>
-<th>إجراءات</th>
-</tr>
-</thead>
-<tbody id="list"></tbody>
-</table>
+<div id="list"></div>
 
 <script>
-// ================= Firebase =================
+/* 🔥 Firebase Config */
 const firebaseConfig = {
   apiKey: "AIzaSyBljZoIG9rTcz-kTX9o9CL8l3WvciZjyTY",
+  authDomain: "chinguitt2718.firebaseapp.com",
   databaseURL: "https://chinguitt2718-default-rtdb.firebaseio.com",
-  projectId: "chinguitt2718"
+  projectId: "chinguitt2718",
+  storageBucket: "chinguitt2718.appspot.com"
 };
 firebase.initializeApp(firebaseConfig);
+
 const db = firebase.database();
-const ref = db.ref("teachers");
+const storage = firebase.storage();
 
-// ================= Local Data =================
 let teachers = JSON.parse(localStorage.getItem("teachers")) || [];
-let editIndex = null;
 
-// ================= Sync from Firebase =================
-ref.on("value", snap=>{
-  if(navigator.onLine){
-    teachers = snap.val() || [];
-    localStorage.setItem("teachers",JSON.stringify(teachers));
+/* 🧠 حفظ محلي */
+function saveLocal(){
+  localStorage.setItem("teachers", JSON.stringify(teachers));
+}
+
+/* ☁️ مزامنة مع Firebase */
+function syncFirebase(){
+  if(!navigator.onLine) return;
+  db.ref("teachers").set(teachers);
+}
+
+/* 📥 تحميل من Firebase (مرة واحدة فقط) */
+db.ref("teachers").once("value", snap=>{
+  if(snap.exists()){
+    teachers = snap.val();
+    saveLocal();
     render();
   }
 });
 
-// ================= Save =================
-function saveTeacher(){
-  const reader = new FileReader();
-  const file = image.files[0];
-
-  reader.onload = function(){
-    const data = {
-      id: editIndex !== null ? teachers[editIndex].id : Date.now(),
-      name: name.value,
-      birthDate: birthDate.value,
-      birthPlace: birthPlace.value,
-      nationalId: nationalId.value,
-      joinDate: joinDate.value,
-      branch: branch.value,
-      skill: skill.value,
-      note: note.value,
-      image: reader.result || ""
-    };
-
-    if(editIndex !== null){
-      teachers[editIndex] = data;
-      editIndex = null;
-    } else {
-      teachers.push(data);
-    }
-
-    // حفظ محلي
-    localStorage.setItem("teachers",JSON.stringify(teachers));
-
-    // مزامنة عند وجود إنترنت
-    if(navigator.onLine){
-      ref.set(teachers);
-    }
-
-    clearForm();
-    render();
-    alert("تم الحفظ بنجاح ✔");
-  };
-
-  file ? reader.readAsDataURL(file) : reader.onload();
+/* 🖼️ رفع الصورة */
+async function uploadImage(file,id){
+  const ref = storage.ref("teachers/"+id+".jpg");
+  await ref.put(file);
+  return await ref.getDownloadURL();
 }
 
-// ================= Render =================
-function render(list=teachers){
-  listElem.innerHTML="";
-  list.forEach((t,i)=>{
-    listElem.innerHTML+=`
-    <tr>
-      <td>${i+1}</td>
-      <td><img src="${t.image}"></td>
-      <td>${t.name}</td>
-      <td>${t.nationalId}</td>
-      <td>${t.branch}</td>
-      <td>${t.skill}</td>
-      <td>
-        <button onclick="edit(${i})">تعديل</button>
-        <button class="delete" onclick="del(${i})">حذف</button>
-      </td>
-    </tr>`;
+/* 💾 حفظ أستاذ */
+document.getElementById("teacherForm").onsubmit = async e =>{
+  e.preventDefault();
+
+  const id = Date.now();
+  let imgUrl = "";
+
+  const file = image.files[0];
+  if(file) imgUrl = await uploadImage(file,id);
+
+  const teacher = {
+    id,
+    name: name.value,
+    subject: subject.value,
+    phone: phone.value,
+    image: imgUrl
+  };
+
+  teachers.push(teacher);
+  saveLocal();
+  syncFirebase();
+  render();
+  e.target.reset();
+};
+
+/* 🖥️ عرض البيانات */
+function render(){
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  teachers.forEach(t=>{
+    list.innerHTML += `
+      <div class="card">
+        ${t.image ? `<img src="${t.image}">` : ""}
+        <b>${t.name}</b><br>
+        📘 ${t.subject}<br>
+        📞 ${t.phone}
+      </div>
+    `;
   });
 }
 
-// ================= Edit =================
-function edit(i){
-  const t=teachers[i];
-  name.value=t.name;
-  birthDate.value=t.birthDate;
-  birthPlace.value=t.birthPlace;
-  nationalId.value=t.nationalId;
-  joinDate.value=t.joinDate;
-  branch.value=t.branch;
-  skill.value=t.skill;
-  note.value=t.note;
-  editIndex=i;
-}
-
-// ================= Delete =================
-function del(i){
-  if(confirm("حذف الأستاذ؟")){
-    teachers.splice(i,1);
-    localStorage.setItem("teachers",JSON.stringify(teachers));
-    if(navigator.onLine) ref.set(teachers);
-    render();
-  }
-}
-
-// ================= Search =================
-function search(v){
-  render(teachers.filter(t=>t.name.includes(v)||t.nationalId.includes(v)));
-}
-
-// ================= Utils =================
-function clearForm(){
-  document.querySelectorAll("input,textarea").forEach(e=>e.value="");
-}
-const listElem=document.getElementById("list");
-
-// عرض أولي
 render();
+
+/* 🌐 مزامنة تلقائية عند عودة الإنترنت */
+window.addEventListener("online", syncFirebase);
 </script>
 
 </body>
