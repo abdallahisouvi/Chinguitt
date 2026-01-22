@@ -7,6 +7,8 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <!-- jsPDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -14,51 +16,47 @@
 <style>
 body {
   font-family: Arial;
-  background: #f5f5f5;
+  background: #f4f6f7;
   margin: 10px;
 }
-h2 {
-  text-align: center;
-  color: green;
-}
+h2,h3 { text-align:center; color:#1e8449 }
 input, textarea, button {
-  width: 100%;
-  padding: 8px;
-  margin: 4px 0;
+  width:100%; padding:8px; margin:4px 0;
 }
 button {
-  background: green;
-  color: white;
-  border: none;
-  cursor: pointer;
+  background:#1e8449; color:white; border:none; cursor:pointer;
 }
 table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  background: white;
+  width:100%; border-collapse:collapse; margin-top:10px; background:white;
 }
-th, td {
-  border: 1px solid #ccc;
-  padding: 5px;
-  text-align: center;
+th,td {
+  border:1px solid #ccc; padding:6px; text-align:center;
 }
 img {
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
+  width:45px; height:45px; border-radius:50%;
 }
-.action-btn {
-  background: #555;
-  margin: 2px;
+.action-btn { background:#555; margin:2px }
+.delete { background:#c0392b }
+#loginBox {
+  max-width:400px; margin:80px auto; background:white;
+  padding:20px; border-radius:8px;
 }
-.delete {
-  background: red;
-}
+#app { display:none }
 </style>
 </head>
 
 <body>
+
+<!-- 🔐 تسجيل الدخول -->
+<div id="loginBox">
+  <h3>دخول مدير المعهد</h3>
+  <input id="email" placeholder="البريد الإلكتروني">
+  <input id="password" type="password" placeholder="كلمة المرور">
+  <button onclick="login()">دخول</button>
+</div>
+
+<!-- 🏫 التطبيق -->
+<div id="app">
 
 <h2>إدارة معهد شنقيط</h2>
 
@@ -69,7 +67,7 @@ img {
 <input id="joinDate" placeholder="تاريخ الالتحاق">
 <input id="branch" placeholder="الفرع">
 <input id="skill" placeholder="الكفاءة">
-<textarea id="note" placeholder="ملاحظة"></textarea>
+<textarea id="note" placeholder="ملاحظات"></textarea>
 <input type="file" id="image">
 
 <button onclick="saveTeacher()">حفظ</button>
@@ -77,7 +75,7 @@ img {
 <hr>
 
 <input placeholder="بحث بالاسم أو الرقم الوطني" onkeyup="search(this.value)">
-<button onclick="exportAllPdf()">تصدير PDF</button>
+<button onclick="exportAllPdf()">تصدير جميع الأساتذة PDF</button>
 
 <table>
 <thead>
@@ -93,6 +91,8 @@ img {
 <tbody id="list"></tbody>
 </table>
 
+</div>
+
 <script>
 // 🔥 Firebase Config
 const firebaseConfig = {
@@ -104,60 +104,84 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+
 const db = firebase.database();
+const auth = firebase.auth();
+const storage = firebase.storage();
 const teachersRef = db.ref("teachers");
+
+// 🔐 Auth
+function login(){
+  auth.signInWithEmailAndPassword(email.value,password.value)
+  .catch(e=>alert(e.message));
+}
+
+auth.onAuthStateChanged(user=>{
+  loginBox.style.display = user ? "none":"block";
+  app.style.display = user ? "block":"none";
+});
 
 // 📦 Data
 let teachers = [];
 let editIndex = null;
 
-// 🔄 مزامنة تلقائية + نسخة محلية
-teachersRef.on("value", snap => {
+// 🔄 Sync + Backup
+teachersRef.on("value",snap=>{
   teachers = snap.val() || [];
-  localStorage.setItem("teachers_backup", JSON.stringify(teachers));
+  localStorage.setItem("teachers_backup",JSON.stringify(teachers));
   render();
 });
 
-// 💾 حفظ
-function saveTeacher() {
-  const reader = new FileReader();
-  const img = image.files[0];
-
-  reader.onload = () => {
-    const data = {
-      name: name.value,
-      birthDate: birthDate.value,
-      birthPlace: birthPlace.value,
-      nationalId: nationalId.value,
-      joinDate: joinDate.value,
-      branch: branch.value,
-      skill: skill.value,
-      note: note.value,
-      image: reader.result || ""
-    };
-
-    if (editIndex !== null) {
-      teachers[editIndex] = data;
-      editIndex = null;
-    } else {
-      teachers.push(data);
-    }
-
-    teachersRef.set(teachers);
-    clearForm();
-  };
-
-  img ? reader.readAsDataURL(img) : reader.onload();
+// 📸 Upload Image
+async function uploadImage(file,id){
+  const ref = storage.ref("teachers/"+id+".jpg");
+  await ref.put(file);
+  return await ref.getDownloadURL();
 }
 
-// 📋 عرض
-function render(list = teachers) {
-  listElem.innerHTML = "";
-  list.forEach((t, i) => {
-    listElem.innerHTML += `
+// 💾 Save
+async function saveTeacher(){
+  const id = editIndex ?? Date.now();
+  let imageUrl = "";
+
+  if(image.files[0]){
+    imageUrl = await uploadImage(image.files[0],id);
+  } else if(editIndex !== null){
+    imageUrl = teachers[editIndex].image;
+  }
+
+  const data = {
+    id,
+    name:name.value,
+    birthDate:birthDate.value,
+    birthPlace:birthPlace.value,
+    nationalId:nationalId.value,
+    joinDate:joinDate.value,
+    branch:branch.value,
+    skill:skill.value,
+    note:note.value,
+    image:imageUrl
+  };
+
+  if(editIndex !== null){
+    teachers[editIndex]=data;
+    editIndex=null;
+  } else {
+    teachers.push(data);
+  }
+
+  teachersRef.set(teachers);
+  clearForm();
+}
+
+// 📋 Render
+function render(list=teachers){
+  listElem.innerHTML="";
+  list.forEach((t,i)=>{
+    listElem.innerHTML+=`
     <tr>
-      <td>${i + 1}</td>
-      <td><img src="${t.image}"></td>
+      <td>${i+1}</td>
+      <td><img src="${t.image||''}"></td>
       <td>${t.name}</td>
       <td>${t.nationalId}</td>
       <td>${t.branch}</td>
@@ -170,66 +194,83 @@ function render(list = teachers) {
   });
 }
 
-// ✏ تعديل
-function edit(i) {
-  const t = teachers[i];
-  name.value = t.name;
-  birthDate.value = t.birthDate;
-  birthPlace.value = t.birthPlace;
-  nationalId.value = t.nationalId;
-  joinDate.value = t.joinDate;
-  branch.value = t.branch;
-  skill.value = t.skill;
-  note.value = t.note;
-  editIndex = i;
+// ✏ Edit
+function edit(i){
+  const t=teachers[i];
+  name.value=t.name;
+  birthDate.value=t.birthDate;
+  birthPlace.value=t.birthPlace;
+  nationalId.value=t.nationalId;
+  joinDate.value=t.joinDate;
+  branch.value=t.branch;
+  skill.value=t.skill;
+  note.value=t.note;
+  editIndex=i;
 }
 
-// ❌ حذف
-function del(i) {
-  if (confirm("حذف الأستاذ؟")) {
-    teachers.splice(i, 1);
+// ❌ Delete
+function del(i){
+  if(confirm("حذف الأستاذ؟")){
+    teachers.splice(i,1);
     teachersRef.set(teachers);
   }
 }
 
-// 🔍 بحث
-function search(v) {
-  render(
-    teachers.filter(t =>
-      t.name.includes(v) || t.nationalId.includes(v)
-    )
-  );
+// 🔍 Search
+function search(v){
+  render(teachers.filter(t=>t.name.includes(v)||t.nationalId.includes(v)));
 }
 
-// 📄 PDF
-function exportAllPdf() {
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF();
-  let y = 20;
-  pdf.text("إدارة معهد شنقيط", 70, 10);
-  teachers.forEach((t, i) => {
-    pdf.text(`${i+1}- ${t.name} | ${t.nationalId}`, 10, y);
-    y += 8;
+// 📄 PDF All
+function exportAllPdf(){
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF();
+  let y=20;
+  pdf.text("قائمة أساتذة معهد شنقيط",60,10);
+  teachers.forEach((t,i)=>{
+    pdf.text(`${i+1}- ${t.name} | ${t.nationalId}`,10,y);
+    y+=8;
   });
   pdf.save("teachers.pdf");
 }
 
-function singlePdf(i) {
-  const { jsPDF } = window.jspdf;
-  const t = teachers[i];
-  const pdf = new jsPDF();
-  pdf.text("تقرير أستاذ", 80, 10);
-  pdf.text("الاسم: " + t.name, 10, 30);
-  pdf.text("الرقم: " + t.nationalId, 10, 40);
-  pdf.text("الفرع: " + t.branch, 10, 50);
-  pdf.save(t.name + ".pdf");
+// 🧾 PDF Single (احترافي)
+function singlePdf(i){
+  const {jsPDF}=window.jspdf;
+  const t=teachers[i];
+  const pdf=new jsPDF();
+
+  pdf.addImage("assets/logo.png","PNG",80,5,50,20);
+  pdf.text("تقرير أستاذ – معهد شنقيط",55,30);
+
+  let y=45;
+  [
+    ["الاسم",t.name],
+    ["تاريخ الميلاد",t.birthDate],
+    ["محل الميلاد",t.birthPlace],
+    ["الرقم الوطني",t.nationalId],
+    ["تاريخ الالتحاق",t.joinDate],
+    ["الفرع",t.branch],
+    ["الكفاءة",t.skill],
+    ["ملاحظات",t.note]
+  ].forEach(r=>{
+    pdf.text(r[0]+" : "+r[1],10,y);
+    y+=8;
+  });
+
+  if(t.image){
+    pdf.addImage(t.image,"JPEG",150,45,40,40);
+  }
+
+  pdf.save("تقرير_"+t.name+".pdf");
 }
 
-function clearForm() {
-  document.querySelectorAll("input, textarea").forEach(e => e.value = "");
+// 🧹 Clear
+function clearForm(){
+  document.querySelectorAll("input,textarea").forEach(e=>e.value="");
 }
 
-const listElem = document.getElementById("list");
+const listElem=document.getElementById("list");
 </script>
 
 </body>
