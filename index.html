@@ -7,56 +7,34 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-
-<!-- jsPDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-body {
-  font-family: Arial;
-  background: #f4f6f7;
-  margin: 10px;
+body{
+  font-family:Arial;
+  background:#f4f6f7;
+  margin:10px
 }
-h2,h3 { text-align:center; color:#1e8449 }
-input, textarea, button {
-  width:100%; padding:8px; margin:4px 0;
+h2{color:#1e8449;text-align:center}
+input,textarea,button{
+  width:100%;padding:8px;margin:4px 0
 }
-button {
-  background:#1e8449; color:white; border:none; cursor:pointer;
+button{
+  background:#1e8449;color:white;border:none;cursor:pointer
 }
-table {
-  width:100%; border-collapse:collapse; margin-top:10px; background:white;
+table{
+  width:100%;border-collapse:collapse;background:white;margin-top:10px
 }
-th,td {
-  border:1px solid #ccc; padding:6px; text-align:center;
+th,td{
+  border:1px solid #ccc;padding:6px;text-align:center
 }
-img {
-  width:45px; height:45px; border-radius:50%;
+img{
+  width:45px;height:45px;border-radius:50%
 }
-.action-btn { background:#555; margin:2px }
-.delete { background:#c0392b }
-#loginBox {
-  max-width:400px; margin:80px auto; background:white;
-  padding:20px; border-radius:8px;
-}
-#app { display:none }
+.delete{background:#c0392b}
 </style>
 </head>
 
 <body>
-
-<!-- 🔐 تسجيل الدخول -->
-<div id="loginBox">
-  <h3>دخول مدير المعهد</h3>
-  <input id="email" placeholder="البريد الإلكتروني">
-  <input id="password" type="password" placeholder="كلمة المرور">
-  <button onclick="login()">دخول</button>
-</div>
-
-<!-- 🏫 التطبيق -->
-<div id="app">
 
 <h2>إدارة معهد شنقيط</h2>
 
@@ -74,8 +52,7 @@ img {
 
 <hr>
 
-<input placeholder="بحث بالاسم أو الرقم الوطني" onkeyup="search(this.value)">
-<button onclick="exportAllPdf()">تصدير جميع الأساتذة PDF</button>
+<input placeholder="بحث بالاسم أو الرقم" onkeyup="search(this.value)">
 
 <table>
 <thead>
@@ -85,74 +62,45 @@ img {
 <th>الاسم</th>
 <th>الرقم</th>
 <th>الفرع</th>
+<th>الكفاءة</th>
 <th>إجراءات</th>
 </tr>
 </thead>
 <tbody id="list"></tbody>
 </table>
 
-</div>
-
 <script>
-// 🔥 Firebase Config
+// ================= Firebase =================
 const firebaseConfig = {
   apiKey: "AIzaSyBljZoIG9rTcz-kTX9o9CL8l3WvciZjyTY",
-  authDomain: "chinguitt2718.firebaseapp.com",
   databaseURL: "https://chinguitt2718-default-rtdb.firebaseio.com",
-  projectId: "chinguitt2718",
-  storageBucket: "chinguitt2718.firebasestorage.app"
+  projectId: "chinguitt2718"
 };
-
 firebase.initializeApp(firebaseConfig);
-
 const db = firebase.database();
-const auth = firebase.auth();
-const storage = firebase.storage();
-const teachersRef = db.ref("teachers");
+const ref = db.ref("teachers");
 
-// 🔐 Auth
-function login(){
-  auth.signInWithEmailAndPassword(email.value,password.value)
-  .catch(e=>alert(e.message));
-}
-
-auth.onAuthStateChanged(user=>{
-  loginBox.style.display = user ? "none":"block";
-  app.style.display = user ? "block":"none";
-});
-
-// 📦 Data
-let teachers = [];
+// ================= Local Data =================
+let teachers = JSON.parse(localStorage.getItem("teachers")) || [];
 let editIndex = null;
 
-// 🔄 Sync + Backup
-teachersRef.on("value",snap=>{
-  teachers = snap.val() || [];
-  localStorage.setItem("teachers_backup",JSON.stringify(teachers));
-  render();
+// ================= Sync from Firebase =================
+ref.on("value", snap=>{
+  if(navigator.onLine){
+    teachers = snap.val() || [];
+    localStorage.setItem("teachers",JSON.stringify(teachers));
+    render();
+  }
 });
 
-// 📸 Upload Image
-async function uploadImage(file,id){
-  const ref = storage.ref("teachers/"+id+".jpg");
-  await ref.put(file);
-  return await ref.getDownloadURL();
-}
+// ================= Save =================
+function saveTeacher(){
+  const reader = new FileReader();
+  const file = image.files[0];
 
-// 💾 Save
-async function saveTeacher(){
-  const id = (editIndex !== null) ? teachers[editIndex].id : Date.now();
-  let imageUrl = "";
-
-  try {
-    if(image.files[0]){
-      imageUrl = await uploadImage(image.files[0], id);
-    } else if(editIndex !== null){
-      imageUrl = teachers[editIndex].image;
-    }
-
+  reader.onload = function(){
     const data = {
-      id: id,
+      id: editIndex !== null ? teachers[editIndex].id : Date.now(),
       name: name.value,
       birthDate: birthDate.value,
       birthPlace: birthPlace.value,
@@ -161,7 +109,7 @@ async function saveTeacher(){
       branch: branch.value,
       skill: skill.value,
       note: note.value,
-      image: imageUrl
+      image: reader.result || ""
     };
 
     if(editIndex !== null){
@@ -171,37 +119,43 @@ async function saveTeacher(){
       teachers.push(data);
     }
 
-    await teachersRef.set(teachers); // 🔥 حفظ فعلي
-    clearForm();
-    alert("تم الحفظ بنجاح ✔");
+    // حفظ محلي
+    localStorage.setItem("teachers",JSON.stringify(teachers));
 
-  } catch (e) {
-    alert("خطأ في الحفظ: " + e.message);
-  }
+    // مزامنة عند وجود إنترنت
+    if(navigator.onLine){
+      ref.set(teachers);
+    }
+
+    clearForm();
+    render();
+    alert("تم الحفظ بنجاح ✔");
+  };
+
+  file ? reader.readAsDataURL(file) : reader.onload();
 }
 
-
-// 📋 Render
+// ================= Render =================
 function render(list=teachers){
   listElem.innerHTML="";
   list.forEach((t,i)=>{
     listElem.innerHTML+=`
     <tr>
       <td>${i+1}</td>
-      <td><img src="${t.image||''}"></td>
+      <td><img src="${t.image}"></td>
       <td>${t.name}</td>
       <td>${t.nationalId}</td>
       <td>${t.branch}</td>
+      <td>${t.skill}</td>
       <td>
-        <button class="action-btn" onclick="edit(${i})">تعديل</button>
-        <button class="action-btn delete" onclick="del(${i})">حذف</button>
-        <button class="action-btn" onclick="singlePdf(${i})">PDF</button>
+        <button onclick="edit(${i})">تعديل</button>
+        <button class="delete" onclick="del(${i})">حذف</button>
       </td>
     </tr>`;
   });
 }
 
-// ✏ Edit
+// ================= Edit =================
 function edit(i){
   const t=teachers[i];
   name.value=t.name;
@@ -215,69 +169,29 @@ function edit(i){
   editIndex=i;
 }
 
-// ❌ Delete
+// ================= Delete =================
 function del(i){
   if(confirm("حذف الأستاذ؟")){
     teachers.splice(i,1);
-    teachersRef.set(teachers);
+    localStorage.setItem("teachers",JSON.stringify(teachers));
+    if(navigator.onLine) ref.set(teachers);
+    render();
   }
 }
 
-// 🔍 Search
+// ================= Search =================
 function search(v){
   render(teachers.filter(t=>t.name.includes(v)||t.nationalId.includes(v)));
 }
 
-// 📄 PDF All
-function exportAllPdf(){
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF();
-  let y=20;
-  pdf.text("قائمة أساتذة معهد شنقيط",60,10);
-  teachers.forEach((t,i)=>{
-    pdf.text(`${i+1}- ${t.name} | ${t.nationalId}`,10,y);
-    y+=8;
-  });
-  pdf.save("teachers.pdf");
-}
-
-// 🧾 PDF Single (احترافي)
-function singlePdf(i){
-  const {jsPDF}=window.jspdf;
-  const t=teachers[i];
-  const pdf=new jsPDF();
-
-  pdf.addImage("assets/logo.png","PNG",80,5,50,20);
-  pdf.text("تقرير أستاذ – معهد شنقيط",55,30);
-
-  let y=45;
-  [
-    ["الاسم",t.name],
-    ["تاريخ الميلاد",t.birthDate],
-    ["محل الميلاد",t.birthPlace],
-    ["الرقم الوطني",t.nationalId],
-    ["تاريخ الالتحاق",t.joinDate],
-    ["الفرع",t.branch],
-    ["الكفاءة",t.skill],
-    ["ملاحظات",t.note]
-  ].forEach(r=>{
-    pdf.text(r[0]+" : "+r[1],10,y);
-    y+=8;
-  });
-
-  if(t.image){
-    pdf.addImage(t.image,"JPEG",150,45,40,40);
-  }
-
-  pdf.save("تقرير_"+t.name+".pdf");
-}
-
-// 🧹 Clear
+// ================= Utils =================
 function clearForm(){
   document.querySelectorAll("input,textarea").forEach(e=>e.value="");
 }
-
 const listElem=document.getElementById("list");
+
+// عرض أولي
+render();
 </script>
 
 </body>
