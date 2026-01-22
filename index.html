@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إدارة معهد شنقيط</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body {
+  font-family: Arial;
+  background: #f5f5f5;
+  margin: 10px;
+}
+h2 {
+  text-align: center;
+  color: green;
+}
+input, textarea, button {
+  width: 100%;
+  padding: 8px;
+  margin: 4px 0;
+}
+button {
+  background: green;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  background: white;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 5px;
+  text-align: center;
+}
+img {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+}
+.action-btn {
+  background: #555;
+  margin: 2px;
+}
+.delete {
+  background: red;
+}
+</style>
+</head>
+
+<body>
+
+<h2>إدارة معهد شنقيط</h2>
+
+<input id="name" placeholder="اسم الأستاذ">
+<input id="birthDate" placeholder="تاريخ الميلاد">
+<input id="birthPlace" placeholder="محل الميلاد">
+<input id="nationalId" placeholder="الرقم الوطني">
+<input id="joinDate" placeholder="تاريخ الالتحاق">
+<input id="branch" placeholder="الفرع">
+<input id="skill" placeholder="الكفاءة">
+<textarea id="note" placeholder="ملاحظة"></textarea>
+<input type="file" id="image">
+
+<button onclick="saveTeacher()">حفظ</button>
+
+<hr>
+
+<input placeholder="بحث بالاسم أو الرقم الوطني" onkeyup="search(this.value)">
+<button onclick="exportAllPdf()">تصدير PDF</button>
+
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>الصورة</th>
+<th>الاسم</th>
+<th>الرقم</th>
+<th>الفرع</th>
+<th>إجراءات</th>
+</tr>
+</thead>
+<tbody id="list"></tbody>
+</table>
+
+<script>
+// 🔥 Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyBljZoIG9rTcz-kTX9o9CL8l3WvciZjyTY",
+  authDomain: "chinguitt2718.firebaseapp.com",
+  databaseURL: "https://chinguitt2718-default-rtdb.firebaseio.com",
+  projectId: "chinguitt2718",
+  storageBucket: "chinguitt2718.firebasestorage.app"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const teachersRef = db.ref("teachers");
+
+// 📦 Data
+let teachers = [];
+let editIndex = null;
+
+// 🔄 مزامنة تلقائية + نسخة محلية
+teachersRef.on("value", snap => {
+  teachers = snap.val() || [];
+  localStorage.setItem("teachers_backup", JSON.stringify(teachers));
+  render();
+});
+
+// 💾 حفظ
+function saveTeacher() {
+  const reader = new FileReader();
+  const img = image.files[0];
+
+  reader.onload = () => {
+    const data = {
+      name: name.value,
+      birthDate: birthDate.value,
+      birthPlace: birthPlace.value,
+      nationalId: nationalId.value,
+      joinDate: joinDate.value,
+      branch: branch.value,
+      skill: skill.value,
+      note: note.value,
+      image: reader.result || ""
+    };
+
+    if (editIndex !== null) {
+      teachers[editIndex] = data;
+      editIndex = null;
+    } else {
+      teachers.push(data);
+    }
+
+    teachersRef.set(teachers);
+    clearForm();
+  };
+
+  img ? reader.readAsDataURL(img) : reader.onload();
+}
+
+// 📋 عرض
+function render(list = teachers) {
+  listElem.innerHTML = "";
+  list.forEach((t, i) => {
+    listElem.innerHTML += `
+    <tr>
+      <td>${i + 1}</td>
+      <td><img src="${t.image}"></td>
+      <td>${t.name}</td>
+      <td>${t.nationalId}</td>
+      <td>${t.branch}</td>
+      <td>
+        <button class="action-btn" onclick="edit(${i})">تعديل</button>
+        <button class="action-btn delete" onclick="del(${i})">حذف</button>
+        <button class="action-btn" onclick="singlePdf(${i})">PDF</button>
+      </td>
+    </tr>`;
+  });
+}
+
+// ✏ تعديل
+function edit(i) {
+  const t = teachers[i];
+  name.value = t.name;
+  birthDate.value = t.birthDate;
+  birthPlace.value = t.birthPlace;
+  nationalId.value = t.nationalId;
+  joinDate.value = t.joinDate;
+  branch.value = t.branch;
+  skill.value = t.skill;
+  note.value = t.note;
+  editIndex = i;
+}
+
+// ❌ حذف
+function del(i) {
+  if (confirm("حذف الأستاذ؟")) {
+    teachers.splice(i, 1);
+    teachersRef.set(teachers);
+  }
+}
+
+// 🔍 بحث
+function search(v) {
+  render(
+    teachers.filter(t =>
+      t.name.includes(v) || t.nationalId.includes(v)
+    )
+  );
+}
+
+// 📄 PDF
+function exportAllPdf() {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  let y = 20;
+  pdf.text("إدارة معهد شنقيط", 70, 10);
+  teachers.forEach((t, i) => {
+    pdf.text(`${i+1}- ${t.name} | ${t.nationalId}`, 10, y);
+    y += 8;
+  });
+  pdf.save("teachers.pdf");
+}
+
+function singlePdf(i) {
+  const { jsPDF } = window.jspdf;
+  const t = teachers[i];
+  const pdf = new jsPDF();
+  pdf.text("تقرير أستاذ", 80, 10);
+  pdf.text("الاسم: " + t.name, 10, 30);
+  pdf.text("الرقم: " + t.nationalId, 10, 40);
+  pdf.text("الفرع: " + t.branch, 10, 50);
+  pdf.save(t.name + ".pdf");
+}
+
+function clearForm() {
+  document.querySelectorAll("input, textarea").forEach(e => e.value = "");
+}
+
+const listElem = document.getElementById("list");
+</script>
+
+</body>
+</html>
