@@ -6,233 +6,134 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{font-family:Tahoma,Arial;background:#f4f6f8;margin:0}
+body{font-family:Tajawal,Arial;background:#f2f4f7;margin:0}
 header{background:#2196f3;color:#fff;text-align:center;padding:10px}
-header img{width:60px;border-radius:50%}
+header img{width:55px;border-radius:50%}
 .container{padding:10px}
-button{background:#2196f3;color:#fff;border:none;padding:6px 10px;border-radius:5px;margin:2px}
-input{width:100%;padding:6px;margin-bottom:6px}
-.card{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;
+input,button{padding:6px;border-radius:5px;border:1px solid #ccc}
+button{background:#2196f3;color:#fff;border:none}
+.row{background:#fff;padding:8px;margin-bottom:6px;border-radius:6px;
 display:flex;justify-content:space-between;align-items:center}
+.actions button{margin-right:3px}
 .hidden{display:none}
-.counter{margin:8px 0;font-weight:bold}
-.photo{width:120px;border-radius:6px;margin-top:6px}
-
-#viewer{
-position:fixed;top:0;left:0;right:0;bottom:0;
-background:rgba(0,0,0,.6);
-display:none;align-items:center;justify-content:center
-}
-#viewer .box{
-background:#fff;padding:15px;border-radius:8px;max-width:90%
-}
+.counter{margin:6px 0;font-weight:bold}
+.photo{width:90px;border-radius:6px}
 </style>
 </head>
 
 <body>
 
 <header>
-  <img src="logo.png">
-  <div>إدارة معهد شنقيط</div>
+  <img src="./logo.png"><br>
+  إدارة معهد شنقيط
 </header>
 
 <div class="container">
 
-<button id="btnAdd">➕ إضافة أستاذ</button>
-<button id="btnList">📋 عرض الأساتذة</button>
-
-<input id="search" placeholder="بحث بالاسم أو الرقم الوطني">
+<button onclick="toggleForm()">➕ إضافة أستاذ</button>
+<input id="search" placeholder="بحث بالاسم أو الرقم الوطني" oninput="render()">
 
 <div class="counter" id="count"></div>
 
-<!-- نموذج الإدخال -->
+<!-- نموذج -->
 <div id="form" class="hidden">
-  <input id="name" placeholder="اسم الأستاذ">
-  <input id="birth" placeholder="تاريخ ومحل الميلاد">
-  <input id="nid" placeholder="الرقم الوطني">
-  <input id="join" placeholder="تاريخ الالتحاق">
-  <input id="branch" placeholder="الفرع">
-  <input id="skill" placeholder="الكفاءة">
-  <input type="file" id="photo">
-  <button type="button" id="btnSave">💾 حفظ</button>
-  <button type="button" id="btnCancel">❌ إلغاء</button>
+<input id="name" placeholder="اسم الأستاذ">
+<input id="birth" placeholder="تاريخ ومحل الميلاد">
+<input id="nid" placeholder="الرقم الوطني">
+<input id="join" placeholder="تاريخ الالتحاق">
+<input id="branch" placeholder="الفرع">
+<input id="skill" placeholder="الكفاءة">
+<input type="file" id="photo">
+<button onclick="save()">💾 حفظ</button>
 </div>
 
-<!-- اللائحة -->
-<div id="list" class="hidden"></div>
-</div>
-
-<!-- نافذة العرض -->
-<div id="viewer">
-  <div class="box" id="viewerBox"></div>
+<div id="list"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-const form = document.getElementById("form");
-const list = document.getElementById("list");
-const count = document.getElementById("count");
-const search = document.getElementById("search");
+let editIndex=null;
 
-const nameI = document.getElementById("name");
-const birthI = document.getElementById("birth");
-const nidI = document.getElementById("nid");
-const joinI = document.getElementById("join");
-const branchI = document.getElementById("branch");
-const skillI = document.getElementById("skill");
-const photoI = document.getElementById("photo");
-
-const viewer = document.getElementById("viewer");
-const viewerBox = document.getElementById("viewerBox");
-
-let editIndex = null;
-
-/* تخزين */
 function getData(){
-  return JSON.parse(localStorage.getItem("teachers") || "[]");
-}
-function saveData(d){
-  localStorage.setItem("teachers", JSON.stringify(d));
+ return JSON.parse(localStorage.getItem("teachers")||"[]");
 }
 
-/* أزرار رئيسية */
-btnAdd.onclick = ()=>{
-  form.classList.remove("hidden");
-  list.classList.add("hidden");
-  editIndex = null;
-};
-
-btnList.onclick = ()=>{
-  form.classList.add("hidden");
-  list.classList.remove("hidden");
-  render();
-};
-
-btnCancel.onclick = ()=>{
-  clearForm();
-  form.classList.add("hidden");
-};
-
-/* حفظ + تعديل */
-btnSave.onclick = ()=>{
-  let data = getData();
-  let oldPhoto = editIndex!==null ? data[editIndex].photo : "";
-
-  let teacher = {
-    name: nameI.value.trim(),
-    birth: birthI.value.trim(),
-    nid: nidI.value.trim(),
-    join: joinI.value.trim(),
-    branch: branchI.value.trim(),
-    skill: skillI.value.trim(),
-    photo: oldPhoto
-  };
-
-  if(photoI.files[0]){
-    let r = new FileReader();
-    r.onload = ()=>{
-      teacher.photo = r.result;
-      finishSave(teacher);
-    };
-    r.readAsDataURL(photoI.files[0]);
-  }else{
-    finishSave(teacher);
-  }
-};
-
-function finishSave(t){
-  let data = getData();
-  if(editIndex===null) data.push(t);
-  else data[editIndex]=t;
-
-  saveData(data);
-  clearForm();
-  form.classList.add("hidden");
-  list.classList.remove("hidden");
-  render();
+function save(){
+ let r=new FileReader();
+ let f=photo.files[0];
+ r.onload=()=>{
+  let d=getData();
+  let o={name:name.value,birth:birth.value,nid:nid.value,
+  join:join.value,branch:branch.value,skill:skill.value,photo:r.result};
+  editIndex===null?d.push(o):d[editIndex]=o;
+  localStorage.setItem("teachers",JSON.stringify(d));
+  editIndex=null; toggleForm(); render();
+ }
+ if(f) r.readAsDataURL(f); else r.onload();
 }
-
-/* تفريغ */
-function clearForm(){
-  nameI.value=birthI.value=nidI.value=joinI.value=branchI.value=skillI.value="";
-  photoI.value="";
-}
-
-/* عرض اللائحة + بحث */
-search.oninput = render;
 
 function render(){
-  let q = search.value || "";
-  let data = getData().filter(t=>t.name.includes(q)||t.nid.includes(q));
-  list.innerHTML="";
-  count.innerText="عدد الأساتذة: "+data.length;
-
-  data.forEach((t,i)=>{
-    list.innerHTML+=`
-    <div class="card">
-      <div>${i+1} - ${t.name}</div>
-      <div>
-        <button onclick="view(${i})">عرض</button>
-        <button onclick="edit(${i})">✏️</button>
-        <button onclick="del(${i})">🗑</button>
-      </div>
-    </div>`;
-  });
+ let q=search.value||"";
+ let d=getData().filter(t=>t.name.includes(q)||t.nid.includes(q));
+ list.innerHTML="";
+ count.innerText="عدد الأساتذة: "+d.length;
+ d.forEach((t,i)=>{
+  list.innerHTML+=`
+  <div class="row">
+   <div>${i+1} - ${t.name}</div>
+   <div class="actions">
+    <button onclick="view(${i})">عرض</button>
+    <button onclick="edit(${i})">✏️</button>
+    <button onclick="del(${i})">🗑</button>
+   </div>
+  </div>`;
+ });
 }
 
-/* عرض نافذة أستاذ */
 function view(i){
-  let t = getData()[i];
-  viewerBox.innerHTML=`
-    <h3>${t.name}</h3>
-    <p>الميلاد: ${t.birth}</p>
-    <p>الرقم الوطني: ${t.nid}</p>
-    <p>الالتحاق: ${t.join}</p>
-    <p>الفرع: ${t.branch}</p>
-    <p>الكفاءة: ${t.skill}</p>
-    ${t.photo?`<img class="photo" src="${t.photo}">`:""}
-    <br><br>
-    <button onclick="exportPDF()">📄 PDF</button>
-    <button onclick="viewer.style.display='none'">إغلاق</button>
-  `;
-  viewer.style.display="flex";
+ let t=getData()[i];
+ let div=document.createElement("div");
+ div.style.background="#fff";div.style.padding="10px";
+ div.innerHTML=`
+ <h3>${t.name}</h3>
+ <p>الميلاد: ${t.birth}</p>
+ <p>الرقم الوطني: ${t.nid}</p>
+ <p>التحاق: ${t.join}</p>
+ <p>الفرع: ${t.branch}</p>
+ <p>الكفاءة: ${t.skill}</p>
+ <img class="photo" src="${t.photo}">
+ <br><br><button onclick="pdf(this.parentNode)">PDF</button>`;
+ document.body.appendChild(div);
 }
 
-/* PDF عربي + صورة */
-function exportPDF(){
-  html2canvas(viewerBox,{scale:2}).then(canvas=>{
-    let pdf = new jspdf.jsPDF("p","mm","a4");
-    let w = 190;
-    let h = canvas.height * w / canvas.width;
-    pdf.addImage(canvas.toDataURL("image/png"),"PNG",10,10,w,h);
-    pdf.save("استاذ.pdf");
-  });
+function pdf(el){
+ html2canvas(el).then(c=>{
+  let pdf=new jspdf.jsPDF();
+  pdf.addImage(c.toDataURL(),"PNG",10,10,190,0);
+  pdf.save("استاذ.pdf");
+ });
 }
 
-/* تعديل */
 function edit(i){
-  let t = getData()[i];
-  nameI.value=t.name;
-  birthI.value=t.birth;
-  nidI.value=t.nid;
-  joinI.value=t.join;
-  branchI.value=t.branch;
-  skillI.value=t.skill;
-  editIndex=i;
-  form.classList.remove("hidden");
-  list.classList.add("hidden");
+ let t=getData()[i];
+ name.value=t.name; birth.value=t.birth; nid.value=t.nid;
+ join.value=t.join; branch.value=t.branch; skill.value=t.skill;
+ editIndex=i; toggleForm();
 }
 
-/* حذف */
 function del(i){
-  let d=getData();
-  d.splice(i,1);
-  saveData(d);
-  render();
+ let d=getData(); d.splice(i,1);
+ localStorage.setItem("teachers",JSON.stringify(d));
+ render();
 }
-</script>
 
+function toggleForm(){
+ form.classList.toggle("hidden");
+}
+
+render();
+</script>
 </body>
 </html>
