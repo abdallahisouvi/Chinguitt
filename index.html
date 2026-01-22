@@ -2,125 +2,160 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>إدارة الأساتذة</title>
+<title>نظام إدارة الأساتذة</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <style>
-body{font-family:Cairo;background:#f4f6f8;margin:0;padding:10px}
+body{font-family:Cairo;background:#eef1f4;margin:0;padding:10px}
 h2{text-align:center}
-form,input,button{width:100%;margin:5px 0;padding:8px}
+.hidden{display:none}
+input,button{width:100%;padding:8px;margin:5px 0}
 .card{background:#fff;padding:10px;margin:8px 0;border-radius:8px}
-img{max-width:80px;border-radius:50%}
+img{width:70px;height:70px;border-radius:50%;object-fit:cover}
+table{width:100%;border-collapse:collapse}
+td,th{border:1px solid #ccc;padding:6px;text-align:center}
+button{background:#0a7cff;color:#fff;border:0;border-radius:6px}
 </style>
 </head>
 
 <body>
 
+<!-- 🔐 LOGIN -->
+<div id="login">
+  <h2>🔐 دخول المدير</h2>
+  <input id="email" placeholder="البريد">
+  <input id="password" type="password" placeholder="كلمة المرور">
+  <button onclick="login()">دخول</button>
+</div>
+
+<!-- 📋 APP -->
+<div id="app" class="hidden">
 <h2>📋 إدارة الأساتذة</h2>
 
-<form id="teacherForm">
-<input id="name" placeholder="اسم الأستاذ" required>
-<input id="subject" placeholder="المادة" required>
-<input id="phone" placeholder="الهاتف">
-<input type="file" id="image">
-<button type="submit">💾 حفظ</button>
+<form id="form">
+  <input id="name" placeholder="اسم الأستاذ" required>
+  <input id="subject" placeholder="المادة" required>
+  <input id="phone" placeholder="الهاتف">
+  <input type="file" id="image">
+  <button>💾 حفظ</button>
 </form>
 
+<h3>📑 اللائحة</h3>
 <div id="list"></div>
 
+<h3>📊 تقرير</h3>
+<table>
+<thead>
+<tr><th>الاسم</th><th>المادة</th><th>الهاتف</th></tr>
+</thead>
+<tbody id="report"></tbody>
+</table>
+
+<button onclick="logout()">🚪 تسجيل الخروج</button>
+</div>
+
 <script>
-/* 🔥 Firebase Config */
-const firebaseConfig = {
-  apiKey: "AIzaSyBljZoIG9rTcz-kTX9o9CL8l3WvciZjyTY",
-  authDomain: "chinguitt2718.firebaseapp.com",
-  databaseURL: "https://chinguitt2718-default-rtdb.firebaseio.com",
-  projectId: "chinguitt2718",
-  storageBucket: "chinguitt2718.appspot.com"
-};
-firebase.initializeApp(firebaseConfig);
-
-const db = firebase.database();
-const storage = firebase.storage();
-
-let teachers = JSON.parse(localStorage.getItem("teachers")) || [];
-
-/* 🧠 حفظ محلي */
-function saveLocal(){
-  localStorage.setItem("teachers", JSON.stringify(teachers));
-}
-
-/* ☁️ مزامنة مع Firebase */
-function syncFirebase(){
-  if(!navigator.onLine) return;
-  db.ref("teachers").set(teachers);
-}
-
-/* 📥 تحميل من Firebase (مرة واحدة فقط) */
-db.ref("teachers").once("value", snap=>{
-  if(snap.exists()){
-    teachers = snap.val();
-    saveLocal();
-    render();
-  }
+/* 🔥 Firebase */
+firebase.initializeApp({
+ apiKey:"AIzaSyBljZoIG9rTcz-kTX9o9CL8l3WvciZjyTY",
+ authDomain:"chinguitt2718.firebaseapp.com",
+ databaseURL:"https://chinguitt2718-default-rtdb.firebaseio.com",
+ projectId:"chinguitt2718",
+ storageBucket:"chinguitt2718.appspot.com"
 });
 
-/* 🖼️ رفع الصورة */
-async function uploadImage(file,id){
-  const ref = storage.ref("teachers/"+id+".jpg");
-  await ref.put(file);
-  return await ref.getDownloadURL();
+const auth=firebase.auth();
+const db=firebase.database();
+const storage=firebase.storage();
+
+let teachers=JSON.parse(localStorage.getItem("teachers"))||[];
+
+/* 🔐 AUTH */
+auth.onAuthStateChanged(u=>{
+ if(u){
+   login.classList.add("hidden");
+   app.classList.remove("hidden");
+   loadFromFirebase();
+ }else{
+   app.classList.add("hidden");
+   login.classList.remove("hidden");
+ }
+});
+
+function login(){
+ auth.signInWithEmailAndPassword(email.value,password.value)
+ .catch(e=>alert(e.message));
+}
+function logout(){auth.signOut();}
+
+/* ☁️ LOAD ONCE (لا تختفي اللائحة) */
+function loadFromFirebase(){
+ db.ref("teachers").once("value",s=>{
+  if(s.exists()){
+    teachers=s.val();
+    localStorage.setItem("teachers",JSON.stringify(teachers));
+    render();
+  }else{
+    render();
+  }
+ });
 }
 
-/* 💾 حفظ أستاذ */
-document.getElementById("teacherForm").onsubmit = async e =>{
-  e.preventDefault();
+/* 🖼️ IMAGE */
+async function upload(file,id){
+ const ref=storage.ref("teachers/"+id+".jpg");
+ await ref.put(file);
+ return await ref.getDownloadURL();
+}
 
-  const id = Date.now();
-  let imgUrl = "";
+/* 💾 SAVE */
+form.onsubmit=async e=>{
+ e.preventDefault();
+ const id=Date.now();
+ let img="";
+ if(image.files[0]) img=await upload(image.files[0],id);
 
-  const file = image.files[0];
-  if(file) imgUrl = await uploadImage(file,id);
+ teachers.push({
+   id,
+   name:name.value,
+   subject:subject.value,
+   phone:phone.value,
+   image:img
+ });
 
-  const teacher = {
-    id,
-    name: name.value,
-    subject: subject.value,
-    phone: phone.value,
-    image: imgUrl
-  };
-
-  teachers.push(teacher);
-  saveLocal();
-  syncFirebase();
-  render();
-  e.target.reset();
+ localStorage.setItem("teachers",JSON.stringify(teachers));
+ if(navigator.onLine) db.ref("teachers").set(teachers);
+ render();
+ form.reset();
 };
 
-/* 🖥️ عرض البيانات */
+/* 🖥️ RENDER */
 function render(){
-  const list = document.getElementById("list");
-  list.innerHTML = "";
-  teachers.forEach(t=>{
-    list.innerHTML += `
-      <div class="card">
-        ${t.image ? `<img src="${t.image}">` : ""}
-        <b>${t.name}</b><br>
-        📘 ${t.subject}<br>
-        📞 ${t.phone}
-      </div>
-    `;
-  });
+ list.innerHTML="";
+ report.innerHTML="";
+ teachers.forEach(t=>{
+   list.innerHTML+=`
+    <div class="card">
+     ${t.image?`<img src="${t.image}"><br>`:""}
+     <b>${t.name}</b><br>
+     ${t.subject}<br>
+     ${t.phone}
+    </div>`;
+   report.innerHTML+=`
+    <tr><td>${t.name}</td><td>${t.subject}</td><td>${t.phone}</td></tr>`;
+ });
 }
 
-render();
-
-/* 🌐 مزامنة تلقائية عند عودة الإنترنت */
-window.addEventListener("online", syncFirebase);
+/* 🌐 AUTO SYNC */
+window.addEventListener("online",()=>{
+ db.ref("teachers").set(teachers);
+});
 </script>
 
 </body>
