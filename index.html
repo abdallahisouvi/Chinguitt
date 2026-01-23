@@ -102,6 +102,41 @@ function save(){
   skill:skill.value.trim(),
   photo:""
  };
+
+ if(!t.name || !t.nid){
+  alert("الاسم والرقم الوطني إجباري");
+  return;
+ }
+
+ // 1️⃣ حفظ محلي فوري
+ let data=getLocal();
+ let i=data.findIndex(x=>x.nid===t.nid);
+ if(i>=0) data[i]=t;
+ else data.push(t);
+ setLocal(data);
+
+ // 2️⃣ تفريغ النموذج + تحديث اللائحة
+ clearForm();
+ render();
+
+ // 3️⃣ مزامنة Firebase فقط عند وجود إنترنت
+ if(!isOnline()) return;
+
+ let file=photo.files[0];
+
+ if(file){
+  let ref=storage.ref("teachers/"+t.nid+".jpg");
+  ref.put(file).then(()=>{
+    ref.getDownloadURL().then(url=>{
+      t.photo=url;
+      db.ref("teachers/"+t.nid).set(t);
+    });
+  }).catch(()=>{});
+ }else{
+  db.ref("teachers/"+t.nid).set(t);
+ }
+}
+
  if(!t.name||!t.nid){alert("الاسم والرقم الوطني إجباري");return}
 
  let data=getLocal();
@@ -194,6 +229,9 @@ function search(v){
 
 render();
 </script>
+function isOnline(){
+  return navigator.onLine;
+}
 
 </body>
 </html>
